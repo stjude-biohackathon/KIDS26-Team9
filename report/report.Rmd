@@ -1,0 +1,883 @@
+---
+title: "Cure model appropriateness"
+output:
+  html_document:
+    self_contained: true
+    theme: null
+    highlight: null
+    mathjax: null
+    toc: true
+    toc_depth: 2
+params:
+  label: NULL
+  source: NULL
+  map: NULL
+  prepared: NULL
+  fit: NULL
+  assess: NULL
+  include_lognormal: FALSE
+  expert_confirmed: FALSE
+---
+
+<!--
+FIXPASS: report/report.Rmd did not exist. The downloadable HTML report was in
+scope (docs/shiny-app-spec.md section 7) and was a Definition-of-Done item, but
+no file was ever created and mod_conclusion.R had no downloadHandler. This is
+that file.
+
+THE CARDINAL RULE (R1) HOLDS HERE TOO. This document computes no inferential
+statistic. Every inferential number below is read out of a field of an object
+returned by an exported cureAssess function, and every one of them carries a
+provenance line naming the call and the field. The only arithmetic performed in
+this file is the app's own permitted list: the six descriptive data counts
+(n, events, censored %, median follow-up, max follow-up, last event time) and
+the single closed form 1 - alpha^(1/n) for the qn threshold, which qn.test()
+does not return as a field.
+
+The copy constants in app/R/helpers.R are deliberately NOT sourced. The app
+renders this Rmd from a copy in tempdir() with knit_root_dir set there, so no
+relative path reaches app/R/helpers.R, and an absolute path would break the
+promise that this file also knits by hand on any machine. The verbatim copy
+blocks below are therefore inlined, and they are copied from the build contract
+section J, the same source helpers.R was filled from.
+
+The CSS is inlined for the same reason: the output must be one self-contained
+file that can be emailed and opened offline, so it never links app/www/app.css.
+-->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, warning = FALSE, message = FALSE,
+  fig.width = 9, fig.height = 6.5, dpi = 110
+)
+
+# ---- what did we actually get? ---------------------------------------------
+# Every param has a NULL-safe default so this file knits by hand with no app
+# running. Each section below is gated on one of these flags and degrades to a
+# plain sentence rather than erroring.
+P_PREPARED <- if (is.data.frame(params$prepared) && nrow(params$prepared) > 0L) params$prepared else NULL
+P_ASSESS   <- params$assess
+P_FIT      <- params$fit
+P_MAP      <- params$map
+
+HAVE_PREP   <- !is.null(P_PREPARED)
+HAVE_ASSESS <- !is.null(P_ASSESS)
+HAVE_TESTS  <- HAVE_ASSESS && isTRUE(P_ASSESS$tests_run) && !is.null(P_ASSESS$tests)
+HAVE_AIC    <- HAVE_ASSESS && is.data.frame(P_ASSESS$screening$aic_table)
+HAVE_KM     <- !is.null(P_FIT) && !is.null(P_FIT$kmplot)
+HAVE_ANY    <- HAVE_PREP || HAVE_ASSESS
+
+TESTS <- if (HAVE_TESTS) P_ASSESS$tests else NULL
+
+# ---- formatting, identical in behaviour to helpers.R F.5-F.7 ---------------
+rp_dash <- function() "—"
+
+rp_num <- function(x, digits = 4) {
+  if (is.null(x) || length(x) != 1L) return(rp_dash())
+  v <- suppressWarnings(as.numeric(x))
+  if (length(v) != 1L || !is.finite(v)) return(rp_dash())
+  if (v != 0 && abs(v) < 1e-4) return(format(v, digits = 3, scientific = TRUE))
+  formatC(v, format = "f", digits = digits)
+}
+
+rp_pct <- function(x, digits = 1) {
+  if (is.null(x) || length(x) != 1L) return(rp_dash())
+  v <- suppressWarnings(as.numeric(x))
+  if (length(v) != 1L || !is.finite(v)) return(rp_dash())
+  paste0(formatC(v, format = "f", digits = digits), "%")
+}
+
+# A length-1 finite numeric out of a package field, or NA. Package statistics
+# come back NA when a diagnostic is not computable and NULL when tests_run is
+# FALSE; both must land on an em dash, never on the text "NA".
+rp_stat <- function(x) {
+  if (is.null(x) || length(x) != 1L) return(NA_real_)
+  v <- suppressWarnings(as.numeric(x))
+  if (length(v) != 1L || !is.finite(v)) NA_real_ else v
+}
+
+esc <- function(x) htmltools::htmlEscape(as.character(x))
+
+rp_chip <- function(variant, label) {
+  stopifnot(variant %in% c("pass", "fail", "neutral", "caution", "void"))
+  glyph <- c(pass = "✓", fail = "✕", neutral = "○",
+             caution = "!", void = "—")[[variant]]
+  paste0('<span class="ca-chip ca-chip--', variant, '"><span class="ca-chip__g">',
+         glyph, '</span>', esc(label), '</span>')
+}
+
+rp_prov <- function(txt) paste0('<p class="ca-provenance">', esc(txt), '</p>')
+
+rp_tech <- function(body, title = "The package's own words") {
+  paste0('<details class="ca-tech"><summary>', esc(title),
+         '</summary><div class="ca-tech__body"><p>', esc(body), '</p></div></details>')
+}
+
+rp_card <- function(title, body_html, chip = NULL, lede = NULL, foot = NULL) {
+  paste0(
+    '<section class="ca-card"><header class="ca-card__head">',
+    '<h3 class="ca-card__title">', esc(title), '</h3>',
+    if (!is.null(chip)) chip else "",
+    '</header>',
+    if (!is.null(lede)) paste0('<p class="ca-card__lede">', esc(lede), '</p>') else "",
+    '<div class="ca-card__body">', body_html, '</div>',
+    if (!is.null(foot)) paste0('<div class="ca-card__foot">', foot, '</div>') else "",
+    '</section>'
+  )
+}
+
+rp_stat_line <- function(value_txt, label = "statistic") {
+  paste0('<p class="ca-stat"><span class="ca-stat__value">', esc(value_txt),
+         '</span> <span class="ca-stat__label">', esc(label), '</span></p>')
+}
+
+rp_kv_table <- function(rows) {
+  cells <- vapply(rows, function(r) {
+    paste0('<tr><th scope="row">', esc(r[[1]]), '</th><td>', esc(r[[2]]), '</td></tr>')
+  }, character(1))
+  paste0('<table class="ca-kv">', paste(cells, collapse = ""), '</table>')
+}
+
+# ---- the six descriptive numbers (helpers.R F.1; permitted app-side) -------
+rp_summary <- function(prepared) {
+  if (is.null(prepared) || !is.data.frame(prepared) || nrow(prepared) == 0L ||
+      is.null(prepared$Y) || is.null(prepared$D)) {
+    return(list(n = 0L, events = 0L, censored_pct = NA_real_,
+                median_followup = NA_real_, max_followup = NA_real_,
+                last_event_time = NA_real_))
+  }
+  y <- as.numeric(prepared$Y); d <- as.integer(prepared$D)
+  ev <- sum(d == 1L, na.rm = TRUE)
+  list(
+    n = length(y),
+    events = ev,
+    censored_pct = 100 * (1 - mean(d == 1L, na.rm = TRUE)),
+    median_followup = stats::median(y, na.rm = TRUE),
+    max_followup = max(y, na.rm = TRUE),
+    last_event_time = if (ev > 0L) max(y[d == 1L], na.rm = TRUE) else NA_real_
+  )
+}
+
+# ---- the one permitted closed form (helpers.R F.4) ------------------------
+# qn.test() returns method, statistic and interpretation only: the threshold
+# 1 - alpha^(1/n) sits inside the interpretation sentence and in no field, so
+# the app (and this report) evaluate it. It is a closed form in alpha and the
+# sample size alone. For qn, LARGER is better.
+rp_qn_threshold <- function(n, alpha = 0.05) {
+  n <- suppressWarnings(as.numeric(n)); a <- suppressWarnings(as.numeric(alpha))
+  if (length(n) != 1L || !is.finite(n) || n < 1) return(NA_real_)
+  if (length(a) != 1L || !is.finite(a) || a <= 0 || a >= 1) return(NA_real_)
+  1 - a^(1 / n)
+}
+
+# alpha in force: read off the package's own mz/shen objects, never invented.
+ALPHA <- 0.05
+if (HAVE_TESTS) {
+  a <- rp_stat(TESTS$mz$alpha)
+  if (is.na(a)) a <- rp_stat(TESTS$shen$alpha)
+  if (!is.na(a)) ALPHA <- a
+}
+N_PREP <- if (HAVE_PREP) nrow(P_PREPARED) else NA_integer_
+
+# ---- the three follow-up tests, as chips -----------------------------------
+# Directions are the contract's: Maller-Zhou and Shen are SMALLER IS BETTER
+# against alpha; qn is LARGER IS BETTER against 1 - alpha^(1/n). Getting qn's
+# direction backwards is a blocking bug. Note that mz and qn are algebraically
+# the same test - mz = (1 - qn)^n exactly - so they can never disagree and are
+# never independent confirmation of one another.
+rp_followup <- function() {
+  if (!HAVE_TESTS) return(NULL)
+  a_mz <- rp_stat(TESTS$mz$alpha);   if (is.na(a_mz)) a_mz <- ALPHA
+  a_sh <- rp_stat(TESTS$shen$alpha); if (is.na(a_sh)) a_sh <- ALPHA
+  qn_thr <- rp_qn_threshold(N_PREP, ALPHA)
+
+  mz <- rp_stat(TESTS$mz$statistic)
+  qn <- rp_stat(TESTS$qn$statistic)
+  sh <- rp_stat(TESTS$shen$statistic)
+
+  list(
+    list(name = "Maller–Zhou", stat = mz, threshold = a_mz, computable = !is.na(mz),
+         sufficient = !is.na(mz) && mz < a_mz),
+    list(name = "qn", stat = qn, threshold = qn_thr, computable = !is.na(qn),
+         sufficient = !is.na(qn) && !is.na(qn_thr) && qn > qn_thr),
+    list(name = "Shen", stat = sh, threshold = a_sh, computable = !is.na(sh),
+         sufficient = !is.na(sh) && sh < a_sh)
+  )
+}
+FU <- rp_followup()
+
+# The fixed decision-string to banner-variant lookup. An unrecognised string is
+# a verdict this report cannot name, so it must not style it either.
+RP_REC_CLASS <- c(
+  "Cure model appropriate"                   = "ca-rec--appropriate",
+  "Cure model not supported"                 = "ca-rec--unsupported",
+  "Follow-up insufficient for cure modeling" = "ca-rec--insufficient"
+)
+rp_rec_class <- function(decision) {
+  if (is.null(decision) || length(decision) != 1L || is.na(decision) ||
+      !(decision %in% names(RP_REC_CLASS))) return(NA_character_)
+  unname(RP_REC_CLASS[[decision]])
+}
+
+# ---- the not-computable wording, shared by three cards (contract J.10/J.11)
+RP_NOT_COMPUTABLE_1 <- "Cannot be computed — the longest observed time is an event, so there is no plateau to test."
+RP_NOT_COMPUTABLE_2 <- "This is a property of the data, not an error. All three follow-up tests need follow-up to extend past the last event."
+
+rp_followup_card <- function(title, obj, stat, threshold, thr_text, dir_text,
+                             sufficient, provenance) {
+  if (is.na(stat)) {
+    body <- paste0(
+      rp_stat_line(rp_dash()),
+      '<p class="ca-void-line"><strong>', esc(RP_NOT_COMPUTABLE_1), '</strong></p>',
+      '<p>', esc(RP_NOT_COMPUTABLE_2), '</p>',
+      rp_tech(obj$interpretation),
+      rp_prov(provenance)
+    )
+    return(rp_card(title, body, chip = rp_chip("void", "Cannot be computed")))
+  }
+  body <- paste0(
+    rp_stat_line(rp_num(stat)),
+    '<p class="ca-threshold"><span class="ca-threshold__value">', esc(thr_text),
+    '</span> <span class="ca-threshold__dir">', esc(dir_text), '</span></p>',
+    rp_tech(obj$interpretation),
+    rp_prov(provenance)
+  )
+  rp_card(
+    title, body,
+    chip = if (isTRUE(sufficient)) rp_chip("pass", "Follow-up looks sufficient")
+           else rp_chip("fail", "Not sufficient")
+  )
+}
+```
+
+<style type="text/css">
+/* FIXPASS: inlined, never linked from app/www/app.css, so the output HTML is
+   one self-contained file that opens offline. The tokens are the app's own. */
+:root {
+  --ca-surface:#FBFCFC; --ca-canvas:#EEF2F3; --ca-sunk:#F4F7F8;
+  --ca-ink:#11191C; --ca-ink2:#414D52; --ca-ink3:#667378;
+  --ca-rule:#DBE2E4; --ca-rule2:#C3CDD0; --ca-accent:#0A5670;
+  --ca-pass-ink:#175A2B; --ca-pass-bg:#E6F3E9; --ca-pass-line:#B4D7BE;
+  --ca-fail-ink:#8E2C20; --ca-fail-bg:#FBEAE6; --ca-fail-line:#EDC2B8;
+  --ca-caution-ink:#7A4E05; --ca-caution-bg:#FBF1DE; --ca-caution-line:#E8D0A2;
+  --ca-neutral-ink:#0A5670; --ca-neutral-bg:#E6F0F4; --ca-neutral-line:#BCD5E0;
+  --ca-void-ink:#4B565A; --ca-void-bg:#ECEFF0; --ca-void-line:#CBD3D5;
+  --ca-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ca-serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --ca-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+body { font-family: var(--ca-sans); font-size: 16px; line-height: 1.55;
+       color: var(--ca-ink); background: var(--ca-canvas);
+       max-width: 62rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+h1, h2, h3, h4 { font-family: var(--ca-serif); font-weight: 600; color: var(--ca-ink);
+                 line-height: 1.25; }
+h1 { font-size: 2rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.5rem; margin: 2.25rem 0 .75rem; padding-bottom: .4rem;
+     border-bottom: 2px solid var(--ca-rule2); }
+h3 { font-size: 1.2rem; margin: 0; }
+h4 { font-size: 1.05rem; margin: 1.5rem 0 .5rem; }
+a { color: var(--ca-accent); }
+code, .ca-mono { font-family: var(--ca-mono); font-size: .9em; }
+#TOC { background: var(--ca-surface); border: 1px solid var(--ca-rule);
+       border-radius: 10px; padding: .75rem 1rem; margin: 1.5rem 0; }
+#TOC ul { margin: .25rem 0; padding-left: 1.1rem; }
+
+.ca-card { background: var(--ca-surface); border: 1px solid var(--ca-rule);
+           border-radius: 10px; padding: 1rem 1.15rem; margin: 0 0 1rem; }
+.ca-card__head { display: flex; flex-wrap: wrap; align-items: baseline;
+                 justify-content: space-between; gap: .5rem; margin-bottom: .5rem; }
+.ca-card__lede { color: var(--ca-ink2); margin: 0 0 .6rem; }
+.ca-card__body > :first-child { margin-top: 0; }
+.ca-card__body > :last-child { margin-bottom: 0; }
+.ca-card__foot { margin-top: .6rem; border-top: 1px solid var(--ca-rule);
+                 padding-top: .5rem; }
+
+.ca-chip { display: inline-block; border: 1px solid; border-radius: 999px;
+           padding: .15rem .65rem; font-size: .9rem; font-weight: 600; }
+.ca-chip__g { margin-right: .4rem; font-weight: 700; }
+.ca-chip--pass    { color: var(--ca-pass-ink);    background: var(--ca-pass-bg);    border-color: var(--ca-pass-line); }
+.ca-chip--fail    { color: var(--ca-fail-ink);    background: var(--ca-fail-bg);    border-color: var(--ca-fail-line); }
+.ca-chip--caution { color: var(--ca-caution-ink); background: var(--ca-caution-bg); border-color: var(--ca-caution-line); }
+.ca-chip--neutral { color: var(--ca-neutral-ink); background: var(--ca-neutral-bg); border-color: var(--ca-neutral-line); }
+.ca-chip--void    { color: var(--ca-void-ink);    background: var(--ca-void-bg);    border-color: var(--ca-void-line); font-weight: 500; }
+
+.ca-stat { margin: .3rem 0 .4rem; }
+.ca-stat__value { font-size: 1.7rem; font-weight: 700; font-family: var(--ca-mono); }
+.ca-stat__label { color: var(--ca-ink3); font-size: .85rem; text-transform: uppercase;
+                  letter-spacing: .04em; }
+.ca-threshold { margin: 0 0 .5rem; color: var(--ca-ink2); }
+.ca-threshold__value { font-family: var(--ca-mono); }
+.ca-threshold__dir { color: var(--ca-ink3); font-size: .9rem; }
+.ca-void-line { color: var(--ca-void-ink); }
+
+.ca-provenance { font-family: var(--ca-mono); font-size: .8rem; color: var(--ca-ink3);
+                 margin: .5rem 0 0; overflow-wrap: anywhere; }
+.ca-tech { margin: .5rem 0 0; border: 1px solid var(--ca-rule); border-radius: 6px;
+           background: var(--ca-sunk); }
+.ca-tech > summary { cursor: pointer; padding: .4rem .7rem; font-size: .9rem;
+                     color: var(--ca-ink2); }
+.ca-tech__body { padding: 0 .7rem .6rem; }
+.ca-tech__body p { margin: 0; }
+
+.ca-statrow { display: flex; flex-wrap: wrap; gap: .75rem; }
+.ca-statrow__cell { flex: 1 1 8.5rem; background: var(--ca-surface);
+                    border: 1px solid var(--ca-rule); border-radius: 8px; padding: .6rem .75rem; }
+.ca-statrow__label { display: block; font-size: .75rem; text-transform: uppercase;
+                     letter-spacing: .05em; color: var(--ca-ink3); }
+.ca-statrow__value { display: block; font-size: 1.45rem; font-weight: 700;
+                     font-family: var(--ca-mono); }
+.ca-statrow__note { display: block; font-size: .78rem; color: var(--ca-ink3); }
+
+table.ca-kv { border-collapse: collapse; width: 100%; }
+table.ca-kv th, table.ca-kv td { border-bottom: 1px solid var(--ca-rule);
+                                 padding: .35rem .5rem; text-align: left; vertical-align: top; }
+table.ca-kv th { width: 34%; font-weight: 600; color: var(--ca-ink2); }
+
+.ca-tablewrap { overflow-x: auto; }
+table.ca-aic { border-collapse: collapse; width: 100%; font-size: .9rem;
+               background: var(--ca-surface); }
+table.ca-aic th, table.ca-aic td { border: 1px solid var(--ca-rule); padding: .35rem .5rem;
+                                   text-align: left; vertical-align: top; }
+table.ca-aic thead th { background: var(--ca-sunk); }
+table.ca-aic td.num { font-family: var(--ca-mono); text-align: right; white-space: nowrap; }
+table.ca-aic td.err { color: var(--ca-fail-ink); }
+.ca-badge { display: inline-block; border: 1px solid var(--ca-rule2); border-radius: 4px;
+            padding: 0 .35rem; font-size: .8rem; }
+
+.ca-note { border: 1px solid var(--ca-rule); border-left-width: 5px; border-radius: 8px;
+           background: var(--ca-surface); padding: .8rem 1rem; margin: 1rem 0; }
+.ca-note__title { font-family: var(--ca-serif); font-weight: 600; margin: 0 0 .35rem; }
+.ca-note--info { border-left-color: var(--ca-neutral-ink); }
+.ca-note--warning { border-left-color: var(--ca-caution-ink); background: var(--ca-caution-bg); }
+.ca-note--interpret { border-left-color: var(--ca-accent); }
+
+.ca-steps { display: flex; flex-direction: column; gap: .75rem; }
+.ca-step { display: flex; gap: .9rem; background: var(--ca-surface);
+           border: 1px solid var(--ca-rule); border-left-width: 5px; border-radius: 10px;
+           padding: .9rem 1rem; }
+.ca-step[data-ca-state="pass"] { border-left-color: var(--ca-pass-ink); }
+.ca-step[data-ca-state="fail"] { border-left-color: var(--ca-fail-ink); }
+.ca-step[data-ca-state="pending"] { border-left-color: var(--ca-caution-ink); }
+.ca-step[data-ca-state="void"] { border-left-color: var(--ca-rule2); }
+.ca-step__marker { font-size: 1.6rem; font-weight: 700; color: var(--ca-ink3); line-height: 1; }
+.ca-step__title { font-family: var(--ca-serif); font-size: 1.1rem; margin: 0 0 .35rem; }
+.ca-step__body p { margin: .4rem 0 0; }
+.ca-step__body blockquote { margin: .5rem 0 0; padding-left: .8rem;
+                            border-left: 3px solid var(--ca-rule2); color: var(--ca-ink2); }
+
+.ca-rec { border: 1px solid var(--ca-rec-line, var(--ca-rule)); border-radius: 10px;
+          background: var(--ca-rec-bg, var(--ca-surface)); padding: 1rem 1.15rem; margin: 1rem 0; }
+.ca-rec--appropriate { --ca-rec-line: var(--ca-pass-line); --ca-rec-bg: var(--ca-pass-bg); --ca-rec-ink: var(--ca-pass-ink); }
+.ca-rec--unsupported { --ca-rec-line: var(--ca-fail-line); --ca-rec-bg: var(--ca-fail-bg); --ca-rec-ink: var(--ca-fail-ink); }
+.ca-rec--insufficient { --ca-rec-line: var(--ca-caution-line); --ca-rec-bg: var(--ca-caution-bg); --ca-rec-ink: var(--ca-caution-ink); }
+.ca-rec__decision { font-family: var(--ca-serif); font-size: 1.65rem; font-weight: 700;
+                    color: var(--ca-rec-ink, var(--ca-ink)); margin-bottom: .6rem; }
+.ca-rec__conditions { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .6rem; }
+.ca-rec__cond { font-family: var(--ca-mono); font-size: .95rem; background: var(--ca-surface);
+                border: 1px solid var(--ca-rule); border-radius: 6px; padding: .25rem .6rem; }
+.ca-rec__cond[data-ca-met="true"]::before { content: "\2713 "; color: var(--ca-pass-ink); font-weight: 700; }
+.ca-rec__cond[data-ca-met="false"]::before { content: "\2715 "; color: var(--ca-fail-ink); font-weight: 700; }
+.ca-key { font-weight: 600; }
+.ca-lede { color: var(--ca-ink2); }
+.ca-foot { color: var(--ca-ink3); font-size: .85rem; border-top: 1px solid var(--ca-rule);
+           margin-top: 2.5rem; padding-top: .75rem; }
+pre { background: var(--ca-sunk); border: 1px solid var(--ca-rule); border-radius: 6px;
+      padding: .75rem; overflow-x: auto; font-size: .82rem; }
+@media print { body { background: #fff; } .ca-tech { display: none; } }
+</style>
+
+```{r title-block, results='asis'}
+lbl <- if (!is.null(params$label) && nzchar(as.character(params$label)[1])) {
+  as.character(params$label)[1]
+} else "no dataset supplied"
+cat('<p class="ca-lede">Dataset: <strong>', esc(lbl), '</strong> · generated ',
+    esc(format(Sys.time(), "%Y-%m-%d %H:%M")),
+    ' by cureAssessApp, a front end to the <span class="ca-mono">cureAssess</span> R package.</p>\n',
+    sep = "")
+cat('<div class="ca-note ca-note--info"><p class="ca-note__title">What this report is</p>',
+    '<p>This app assesses whether a cure model is <em>appropriate</em>. It does not fit your final ',
+    'analysis model, and it does not produce treatment-effect estimates.</p>',
+    '<p>Nothing in this document was computed by the app. Every statistic below is a field of an ',
+    'object returned by an exported <span class="ca-mono">cureAssess</span> function, and each one ',
+    'names its call and field.</p></div>\n', sep = "")
+```
+
+```{r nothing-supplied, results='asis', eval=!HAVE_ANY}
+cat('<div class="ca-note ca-note--warning"><p class="ca-note__title">No assessment supplied</p>',
+    '<p>This report was knitted with its default parameters, so there is no dataset and no ',
+    'assessment to describe. Every section below needs the objects the app passes in: the prepared ',
+    'data frame from <span class="ca-mono">prepare.surv.data()</span>, the fit from ',
+    '<span class="ca-mono">model.fitting()</span>, and the assessment from ',
+    '<span class="ca-mono">cure.appropriateness(run_tests = "yes")</span>.</p>',
+    '<p>To produce a real report, download it from the Conclusion step of the app after running an ',
+    'assessment, or knit this file with those objects passed as parameters.</p></div>\n', sep = "")
+```
+
+## Dataset and provenance
+
+```{r provenance, results='asis'}
+src <- params$source
+src_txt <- if (identical(src, "builtin")) {
+  "Built-in example shipped with the app"
+} else if (identical(src, "upload")) {
+  "Uploaded by the user"
+} else {
+  rp_dash()
+}
+scale_txt <- if (!is.null(P_MAP$time_scale)) {
+  if (identical(P_MAP$time_scale, "days_to_years")) {
+    "days_to_years — times were divided by 365.25 by prepare.surv.data()"
+  } else {
+    "none — times were used as supplied"
+  }
+} else rp_dash()
+
+rows <- list(
+  c("Dataset", lbl),
+  c("Provenance", src_txt),
+  c("Time column", if (!is.null(P_MAP$time)) P_MAP$time else rp_dash()),
+  c("Status column", if (!is.null(P_MAP$status)) P_MAP$status else rp_dash()),
+  c("Value meaning “event”", if (!is.null(P_MAP$event_level)) P_MAP$event_level else rp_dash()),
+  c("Time scale", scale_txt)
+)
+cat(rp_card(
+  "How this dataset was read",
+  paste0(
+    rp_kv_table(rows),
+    '<p class="ca-lede">The status column was recoded to 0/1 by the app before the package saw it: ',
+    'a row counts as an event when the status value equals the level named above. Rows with a ',
+    'missing time or status were dropped, so every n in this report is the analysed n.</p>',
+    rp_prov("prepare.surv.data(data, time, status, time_scale) -> the prepared frame")
+  )
+), "\n")
+```
+
+## Data summary
+
+```{r data-summary, results='asis'}
+if (!HAVE_PREP) {
+  cat('<p class="ca-lede">No prepared dataset was supplied, so there is nothing to summarise.</p>\n')
+} else {
+  s <- rp_summary(P_PREPARED)
+  cells <- list(
+    c("n", format(s$n, big.mark = ","), "rows analysed, after dropping"),
+    c("Events", format(s$events, big.mark = ","), "D = 1"),
+    c("Censored", rp_pct(s$censored_pct), "share of rows with D = 0"),
+    c("Median follow-up", rp_num(s$median_followup, 3), "median of observed times, all subjects"),
+    c("Max follow-up", rp_num(s$max_followup, 3), "largest observed time"),
+    c("Last event", rp_num(s$last_event_time, 3), "largest time with D = 1")
+  )
+  html <- paste0(vapply(cells, function(c3) paste0(
+    '<div class="ca-statrow__cell"><span class="ca-statrow__label">', esc(c3[1]),
+    '</span><span class="ca-statrow__value">', esc(c3[2]),
+    '</span><span class="ca-statrow__note">', esc(c3[3]), '</span></div>'
+  ), character(1)), collapse = "")
+  cat('<div class="ca-statrow">', html, '</div>\n', sep = "")
+  cat('<p class="ca-lede">These six are descriptive counts on the prepared <span class="ca-mono">Y</span> ',
+      'and <span class="ca-mono">D</span> columns, not cure-model statistics. They are the only ',
+      'numbers in this report the app computed itself.</p>\n', sep = "")
+}
+```
+
+## Kaplan-Meier curve
+
+```{r km-plot, fig.alt="Kaplan-Meier survival curve with a number-at-risk table underneath", results='asis', eval=HAVE_KM}
+cat('<p class="ca-lede">The package’s own Kaplan-Meier plot, with its risk table, exactly as the ',
+    'app shows it.</p>\n', sep = "")
+```
+
+```{r km-draw, eval=HAVE_KM}
+ok <- tryCatch({
+  if (requireNamespace("survminer", quietly = TRUE)) invisible(NULL)
+  print(P_FIT$kmplot)
+  TRUE
+}, error = function(e) {
+  message("KM plot could not be drawn: ", conditionMessage(e))
+  FALSE
+})
+```
+
+```{r km-prov, results='asis', eval=HAVE_KM}
+cat(rp_prov("model.fitting(plot_km = TRUE) -> $kmplot"), "\n")
+cat('<p class="ca-lede">A plateau is not proof. A Kaplan-Meier curve goes flat for two different ',
+    'reasons that look identical on the plot: the uncured have all had their events, or there is ',
+    'nobody left to watch. Heavy censoring alone manufactures a convincing plateau in data with a ',
+    'true cure fraction of exactly zero. That is what the diagnostics below are for.</p>\n', sep = "")
+```
+
+```{r km-missing, results='asis', eval=!HAVE_KM}
+cat('<p class="ca-lede">No Kaplan-Meier plot was supplied. The app passes ',
+    '<span class="ca-mono">model.fitting(plot_km = TRUE)$kmplot</span>; without it there is no ',
+    'curve to draw.</p>\n', sep = "")
+```
+
+## Model screening (AIC)
+
+```{r aic-table, results='asis'}
+if (!HAVE_AIC) {
+  cat('<p class="ca-lede">No assessment was supplied, so there is no AIC table.</p>\n')
+} else {
+  tb <- P_ASSESS$screening$aic_table
+  n_models <- nrow(tb)
+  set_txt <- if (isTRUE(params$include_lognormal)) {
+    paste0("Candidate set: ", n_models, " models, with include_lognormal = TRUE — the lognormal ",
+           "models were fitted. The lognormal tail can change both the selected model and the ",
+           "RECeUS conclusion.")
+  } else {
+    paste0("Candidate set: ", n_models, " models, with include_lognormal = FALSE — the lognormal ",
+           "models were not fitted. This is the default and matches the tutorial’s four ",
+           "distributions.")
+  }
+  cat('<p class="ca-lede">', esc(set_txt), '</p>\n', sep = "")
+
+  hdr <- paste0('<tr><th>model</th><th>model_type</th><th>AIC</th>',
+                '<th>parameter_estimates</th><th>error</th></tr>')
+  body <- vapply(seq_len(n_models), function(i) {
+    paste0(
+      '<tr><td><span class="ca-mono">', esc(tb$model[i]), '</span></td>',
+      '<td><span class="ca-badge">', esc(tb$model_type[i]), '</span></td>',
+      '<td class="num">', esc(rp_num(tb$AIC[i], 2)), '</td>',
+      '<td><span class="ca-mono">', esc(tb$parameter_estimates[i]), '</span></td>',
+      '<td class="err">', esc(tb$error[i]), '</td></tr>'
+    )
+  }, character(1))
+  cat('<div class="ca-tablewrap"><table class="ca-aic"><thead>', hdr, '</thead><tbody>',
+      paste(body, collapse = ""), '</tbody></table></div>\n', sep = "")
+  cat('<p class="ca-lede">The <span class="ca-mono">error</span> column is always shown and failed ',
+      'rows are never removed: <span class="ca-mono">model.fitting()</span> does not throw on a ',
+      'failed fit, it records the reason there and sets <span class="ca-mono">AIC = NA</span>. ',
+      'Hiding the column would turn a silent failure into an invisible one.</p>\n', sep = "")
+
+  best <- P_ASSESS$screening$best_model
+  btyp <- P_ASSESS$screening$best_model_type
+  cat(rp_card(
+    "Smallest AIC",
+    paste0(
+      '<p><strong>', esc(if (length(best) == 1L && !is.na(best)) best else rp_dash()),
+      '</strong> <span class="ca-badge">',
+      esc(if (length(btyp) == 1L && !is.na(btyp)) btyp else rp_dash()), '</span></p>',
+      '<blockquote><p>', esc(P_ASSESS$screening$initial_decision), '</p></blockquote>',
+      '<p class="ca-lede">AIC is initial support only. It asks how well a model describes the data ',
+      'you have; identifiability asks whether the data contain enough follow-up to pin a cure ',
+      'fraction down. Only the second question is decided by the diagnostics below.</p>',
+      rp_prov("cure.appropriateness() -> $screening$aic_table, $best_model, $initial_decision")
+    )
+  ), "\n")
+}
+```
+
+## The five diagnostics
+
+```{r diag-lede, results='asis', eval=HAVE_TESTS}
+cat('<p class="ca-lede">All five are shown, including when a non-cure model won on AIC: ',
+    '“a non-cure model fits better” and “there is no cure fraction to find” are ',
+    'different claims. The RECeUS distribution used was ',
+    '<span class="ca-mono">', esc(P_ASSESS$selected_receus_dist), '</span>',
+    if (!is.null(P_ASSESS$selected_receus_model) && length(P_ASSESS$selected_receus_model) == 1L &&
+        !is.na(P_ASSESS$selected_receus_model)) {
+      paste0(', mapped from <span class="ca-mono">', esc(P_ASSESS$selected_receus_model), '</span>')
+    } else "",
+    '. Maller–Zhou and <span class="ca-mono">qn</span> are the same underlying count presented ',
+    'two ways, so they always agree with each other and are never independent confirmation.</p>\n',
+    sep = "")
+```
+
+```{r diag-cards, results='asis', eval=HAVE_TESTS}
+qn_thr <- rp_qn_threshold(N_PREP, ALPHA)
+
+cat(rp_followup_card(
+  "Maller–Zhou test (1994)", TESTS$mz, FU[[1]]$stat, FU[[1]]$threshold,
+  paste0("Threshold: α = ", rp_num(FU[[1]]$threshold, 3)),
+  "smaller is better — below α supports sufficient follow-up",
+  FU[[1]]$sufficient,
+  "cure.appropriateness() -> $tests$mz$statistic, $alpha"
+), "\n")
+
+cat(rp_followup_card(
+  "qn statistic (Maller & Zhou 1996)", TESTS$qn, FU[[2]]$stat, FU[[2]]$threshold,
+  paste0("Threshold: 1 - α^(1/n) = ", rp_num(qn_thr, 6), "  (computed by this app)"),
+  "larger is better — above the threshold supports sufficient follow-up",
+  FU[[2]]$sufficient,
+  "cure.appropriateness() -> $tests$qn$statistic; threshold computed by the app from α and n"
+), "\n")
+
+cat(rp_followup_card(
+  "Shen test (2000)", TESTS$shen, FU[[3]]$stat, FU[[3]]$threshold,
+  paste0("Threshold: α = ", rp_num(FU[[3]]$threshold, 3)),
+  "smaller is better — below α supports sufficient follow-up; Shen uses a narrower window than Maller–Zhou and is the stricter of the two by design",
+  FU[[3]]$sufficient,
+  "cure.appropriateness() -> $tests$shen$statistic, $alpha"
+), "\n")
+
+# Immune summary: descriptive, and never a pass/fail chip, despite the name.
+im <- TESTS$immune
+cat(rp_card(
+  "Maller–Zhou immune summary (1996)",
+  paste0(
+    rp_kv_table(list(
+      c("Event probability by the end of follow-up (p_hat)", rp_num(im$p_hat)),
+      c("Censoring proportion (p_cens)", rp_num(im$p_cens)),
+      c("Last observation", rp_num(im$last_observation)),
+      c("Last observation censored?",
+        if (isTRUE(im$last_observation_censored)) "TRUE — follow-up outlived the last event"
+        else "FALSE — the study stopped while events were still happening")
+    )),
+    '<p class="ca-lede">There is no threshold and no null hypothesis here. This is a descriptive ',
+    'summary, not a test, and it never carries a pass or fail.</p>',
+    rp_tech(im$interpretation),
+    rp_prov("cure.appropriateness() -> $tests$immune$p_hat, $p_cens, $last_observation, $last_observation_censored")
+  ),
+  chip = rp_chip("neutral", "Descriptive, not a test")
+), "\n")
+
+# RECeUS.
+rc <- TESTS$receus
+pi_hat <- rp_stat(rc$pi_hat); r_hat <- rp_stat(rc$r_hat); tau <- rp_stat(rc$tau)
+if (is.na(pi_hat) && is.na(r_hat)) {
+  cat(rp_card(
+    "RECeUS (Selukar & Othus, 2023)",
+    paste0(
+      rp_stat_line(rp_dash(), "pi_hat"), rp_stat_line(rp_dash(), "r_hat"),
+      '<p class="ca-void-line"><strong>Cannot be computed — the model fit behind RECeUS did not ',
+      'converge for this dataset.</strong></p>',
+      rp_tech(rc$interpretation),
+      rp_prov("cure.appropriateness() -> $tests$receus$pi_hat, $r_hat")
+    ),
+    chip = rp_chip("void", "Cannot be computed")
+  ), "\n")
+} else {
+  chip_variant <- if (identical(rc$decision, "Cure model appropriate")) "pass" else "fail"
+  cat(rp_card(
+    "RECeUS (Selukar & Othus, 2023)",
+    paste0(
+      '<div class="ca-rec__conditions">',
+      '<div class="ca-rec__cond" data-ca-met="',
+      if (isTRUE(rc$cure_fraction_condition)) "true" else "false", '">π̂ = ',
+      esc(rp_num(pi_hat)), ' &gt; 0.025</div>',
+      '<div class="ca-rec__cond" data-ca-met="',
+      if (isTRUE(rc$followup_condition)) "true" else "false", '">r̂ = ',
+      esc(rp_num(r_hat)), ' &lt; 0.05</div></div>',
+      '<p>Evaluated at τ = ', esc(rp_num(tau)), ', the largest observed time. Distribution: ',
+      '<span class="ca-mono">', esc(rc$dist), '</span>.</p>',
+      '<p class="ca-lede">The rule is a conjunction: both conditions must hold. r̂ is the share ',
+      'of uncured subjects still censored at the end of follow-up, and it asks the identifiability ',
+      'question most directly.</p>',
+      rp_tech(rc$interpretation),
+      rp_prov("cure.appropriateness() -> $tests$receus$pi_hat, $r_hat, $tau, $decision")
+    ),
+    chip = rp_chip(chip_variant, rc$decision)
+  ), "\n")
+}
+```
+
+```{r diag-not-run, results='asis', eval=(HAVE_ASSESS && !HAVE_TESTS)}
+cat('<h3>The diagnostics were not run</h3>\n')
+cat('<blockquote><p>', esc(P_ASSESS$tests_reason), '</p></blockquote>\n', sep = "")
+cat('<p class="ca-lede">No diagnostic cards are shown, because there is nothing to show. Steps ',
+    '② and ③ of the verdict below are not fabricated either.</p>\n', sep = "")
+```
+
+```{r diag-none, results='asis', eval=!HAVE_ASSESS}
+cat('<p class="ca-lede">No assessment was supplied, so there are no diagnostics.</p>\n')
+```
+
+## The three-step check, in the published order
+
+```{r steps-lede, results='asis'}
+cat('<p class="ca-lede">Failing any one step means a cure model is inappropriate. This is a ',
+    'conjunction, not a score.</p>\n', sep = "")
+```
+
+```{r step-strip, results='asis'}
+step <- function(marker, title, state_word, chip, body_html) {
+  paste0('<div class="ca-step" data-ca-state="', state_word, '">',
+         '<div class="ca-step__marker">', marker, '</div>',
+         '<div class="ca-step__body"><h3 class="ca-step__title">', esc(title), '</h3>',
+         chip, body_html, '</div></div>')
+}
+
+confirmed <- isTRUE(params$expert_confirmed)
+step1 <- step(
+  "①", "Expert judgment",
+  if (confirmed) "pass" else "pending",
+  if (confirmed) rp_chip("pass", "Confirmed by user") else rp_chip("neutral", "Still open"),
+  paste0('<p>Software cannot judge clinical plausibility. Is there a clinical reason to expect that ',
+         'some patients in this population are cured? This step is a conversation with a clinician, ',
+         'and this app will never answer it for you.</p>',
+         if (confirmed) {
+           '<p class="ca-lede">The user confirmed this step in the app before downloading this report.</p>'
+         } else {
+           '<p class="ca-lede">This step was <strong>not</strong> confirmed in the app. Steps 2 and 3 below still report their findings, but a cure model is only appropriate if all three steps pass.</p>'
+         })
+)
+
+im <- if (HAVE_TESTS) TESTS$immune else NULL
+step2 <- if (is.null(im)) {
+  step("②", "Visual assessment", "void", rp_chip("neutral", "Not available"),
+       '<p>This is a visual aid, not a test.</p><p class="ca-lede">No assessment was supplied.</p>')
+} else {
+  step("②", "Visual assessment", "void",
+       if (isTRUE(im$last_observation_censored)) rp_chip("neutral", "Plateau possible")
+       else rp_chip("neutral", "No clear plateau"),
+       paste0('<p>This is a visual aid, not a test.</p><blockquote><p>', esc(im$interpretation),
+              '</p></blockquote>',
+              rp_prov("cure.appropriateness() -> $tests$immune$last_observation_censored")))
+}
+
+rc <- if (HAVE_TESTS) TESTS$receus else NULL
+step3 <- if (is.null(rc) || is.null(rc$decision)) {
+  step("③", "Quantitative assessment", "void", rp_chip("neutral", "Not available"),
+       '<p class="ca-lede">No assessment was supplied.</p>')
+} else {
+  step("③", "Quantitative assessment",
+       if (identical(rc$decision, "Cure model appropriate")) "pass" else "fail",
+       rp_chip(if (identical(rc$decision, "Cure model appropriate")) "pass" else "fail", rc$decision),
+       rp_prov("cure.appropriateness() -> $tests$receus$decision"))
+}
+
+cat('<div class="ca-steps">', step1, step2, step3, '</div>\n', sep = "")
+```
+
+```{r recommendation, results='asis', eval=HAVE_TESTS}
+rc <- TESTS$receus
+variant <- rp_rec_class(rc$decision)
+pi_hat <- rp_stat(rc$pi_hat); r_hat <- rp_stat(rc$r_hat); tau <- rp_stat(rc$tau)
+
+m <- sum(vapply(FU, function(x) isTRUE(x$computable), logical(1)))
+k <- sum(vapply(FU, function(x) isTRUE(x$sufficient), logical(1)))
+tally <- paste0("Of the three follow-up tests, ", k, " of ", m,
+                " computable tests indicated sufficient follow-up")
+tally <- if (m < 3L) {
+  paste0(tally, "; the other ", 3L - m, " could not be computed on this dataset.")
+} else {
+  paste0(tally, ".")
+}
+
+cat('<div class="ca-rec ', if (is.na(variant)) "" else variant, '">',
+    '<div class="ca-rec__decision">', esc(rc$decision), '</div>',
+    '<div class="ca-rec__conditions">',
+    '<div class="ca-rec__cond" data-ca-met="',
+    if (isTRUE(rc$cure_fraction_condition)) "true" else "false", '">π̂ = ',
+    esc(rp_num(pi_hat)), ' &gt; 0.025</div>',
+    '<div class="ca-rec__cond" data-ca-met="',
+    if (isTRUE(rc$followup_condition)) "true" else "false", '">r̂ = ',
+    esc(rp_num(r_hat)), ' &lt; 0.05</div></div>',
+    '<p>Evaluated at τ = ', esc(rp_num(tau)), ', the largest observed time.</p>',
+    '<p class="ca-key">', esc(tally), '</p>',
+    '<p class="ca-lede">That line counts chips already shown above. It is not a composite score, ',
+    'the tests are not weighted, and a majority does not decide anything.</p>',
+    rp_prov("cure.appropriateness() -> $tests$receus$pi_hat, $r_hat, $decision"),
+    '</div>\n', sep = "")
+```
+
+## What the package says
+
+```{r package-says, results='asis', eval=HAVE_ASSESS}
+cat(rp_card(
+  "The package's own summary",
+  paste0(
+    '<blockquote><p>', esc(P_ASSESS$final_recommendation), '</p></blockquote>',
+    '<p class="ca-lede">This sentence summarises the model comparison only — it does not mention ',
+    'RECeUS, π̂ or r̂. The RECeUS recommendation is step ③ above.</p>',
+    '<h4>Why the diagnostics were or were not run</h4>',
+    '<blockquote><p>', esc(P_ASSESS$tests_reason), '</p></blockquote>',
+    rp_prov("cure.appropriateness() -> $final_recommendation, $tests_reason")
+  )
+), "\n")
+```
+
+```{r package-says-none, results='asis', eval=!HAVE_ASSESS}
+cat('<p class="ca-lede">No assessment was supplied, so the package said nothing.</p>\n')
+```
+
+## The diagnostics can disagree
+
+```{r disagree-lead, results='asis', eval=HAVE_TESTS}
+rc <- TESTS$receus
+rows <- FU
+if (!is.na(rp_stat(rc$r_hat))) {
+  rows <- c(rows, list(list(name = "RECeUS", computable = TRUE,
+                            sufficient = isTRUE(rc$followup_condition))))
+}
+computable <- Filter(function(x) isTRUE(x$computable), rows)
+yes <- vapply(Filter(function(x) isTRUE(x$sufficient), computable), function(x) x$name, character(1))
+no  <- vapply(Filter(function(x) !isTRUE(x$sufficient), computable), function(x) x$name, character(1))
+if (length(yes) && length(no)) {
+  cat('<p><strong>On this dataset the diagnostics disagree.</strong> ',
+      esc(paste(yes, collapse = ", ")), ' indicate sufficient follow-up; ',
+      esc(paste(no, collapse = ", ")), ' do not. This is expected — read on.</p>\n', sep = "")
+}
+```
+
+<p><strong>Disagreement is information, not a malfunction.</strong> These five diagnostics ask
+overlapping but different questions, and they were published by different authors to catch different
+failures. Do not count them and take the majority &mdash; they are not votes. Maller&ndash;Zhou and
+<span class="ca-mono">qn</span> are the same underlying count presented two ways, so they always
+agree with each other and are never independent confirmation of one another. Shen uses a narrower
+window precisely because Maller&ndash;Zhou can over-declare sufficiency, so Maller&ndash;Zhou passing
+while Shen fails is Shen working as designed. RECeUS asks the identifiability question most directly,
+through r&#770;. When they split: check how close each statistic sits to its threshold, prefer the
+stricter test when the pattern is the known one, weigh r&#770;, and look back at the curve.</p>
+
+<p class="ca-lede">The thresholds 0.05, 0.025 and the r&#770; cut-off are conventions rather than
+laws. A dataset landing just the wrong side of one is telling you the answer is genuinely uncertain,
+not that it is no.</p>
+
+```{r options-panel, results='asis', eval=HAVE_TESTS}
+if (identical(TESTS$receus$decision, "Follow-up insufficient for cure modeling")) {
+  cat('<div class="ca-note ca-note--warning">',
+      '<p class="ca-note__title">The diagnostics say follow-up is insufficient. What are my options?</p>',
+      '<p>This is not a dead end, and it is not a verdict on your data quality. It means the ',
+      'follow-up you have cannot separate “cured” from “not yet relapsed”, so a ',
+      'cure model would return a number that looks precise and is not identified. Four routes:</p>',
+      '<p><strong>1. Fit a non-cure model instead.</strong> The most common and usually the right ',
+      'answer. Standard survival models — Cox, Weibull, whatever fits — remain valid and ',
+      'interpretable; you simply do not report a cure fraction. You lose a quantity the data could ',
+      'not support anyway.</p>',
+      '<p><strong>2. Use the extreme-value estimators of Escobar-Bach and Van Keilegom (2019).</strong> ',
+      'Non-parametric cure-rate estimation designed specifically for insufficient follow-up, using ',
+      'extreme-value theory to extrapolate the tail rather than assuming the plateau is complete. Not ',
+      'implemented in cureAssess — you would fit this outside the app.</p>',
+      '<p><strong>3. Use Yuen and Musta’s relaxed condition (2024).</strong> A weaker ',
+      'sufficient-follow-up requirement than the classical condition used by the tests here, so some ',
+      'datasets that fail the classical condition are still workable under theirs. Also outside this ',
+      'app.</p>',
+      '<p><strong>4. Collect more follow-up.</strong> If the study is ongoing, or a later data cut ',
+      'exists, this is the only route that fixes the problem at source rather than working around it. ',
+      'Othus et al. refitted cure models on six SWOG trials at an early and a later follow-up time, ',
+      'found the mean-survival estimates shifted materially, and found the <strong>direction of the ',
+      'shift was not predictable</strong>. There is no post-hoc correction to apply — which is ',
+      'why this check happens before you fit, not after.</p></div>\n', sep = "")
+}
+```
+
+## References and how to cite
+
+The four key references behind the diagnostics in this report:
+
+- Maller RA, Zhou S (1992). Estimating the proportion of immunes in a censored sample. *Biometrika*, 79(4), 731&ndash;739. doi:10.1093/biomet/79.4.731
+- Maller RA, Zhou S (1994). Testing for sufficient follow-up and outliers in survival data. *Journal of the American Statistical Association*, 89(428), 1499&ndash;1506. doi:10.1080/01621459.1994.10476889
+- Shen P-S (2000). Testing for sufficient follow-up in survival data. *Statistics & Probability Letters*, 49(4), 313&ndash;322. doi:10.1016/S0167-7152(00)00063-8
+- Selukar S, Othus M (2023). RECeUS: Ratio estimation of censored uncured subjects, a different approach for assessing cure model appropriateness in studies with long-term survivors. *Statistics in Medicine*, 42(3), 209&ndash;227. doi:10.1002/sim.9610
+
+The workflow this app implements is the Figure 1 workflow of &ldquo;A Tutorial for Evaluating Cure
+Model Appropriateness&rdquo; &mdash; Mudunkotuwa, Ghosh, Triplett, Selukar (in preparation).
+
+**How to cite.** Cite the package with `citation("cureAssess")` in R, and cite the tutorial
+manuscript above for the workflow. `cureAssess` is MIT licensed; authors Geethanjalee Mudunkotuwa
+(author, creator, copyright holder) and Durbadal Ghosh (author); upstream
+`https://github.com/GeethanjaleeM/cureAssess`. This app is a front end; every statistic is the
+package&rsquo;s.
+
+## Session information
+
+```{r session-info, comment=NA}
+sessionInfo()
+```
+
+```{r footer, results='asis'}
+cat('<p class="ca-foot">Generated by cureAssessApp. Every inferential number above came out of a ',
+    'field of a <span class="ca-mono">cureAssess</span> object; the app computed only the six ',
+    'descriptive data counts and the <span class="ca-mono">qn</span> threshold ',
+    '1 - α^(1/n), which <span class="ca-mono">qn.test()</span> does not return.</p>\n', sep = "")
+```
