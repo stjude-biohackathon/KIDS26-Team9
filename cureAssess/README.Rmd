@@ -1,0 +1,133 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# cureAssess
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+cureAssess helps you decide whether a **cure model** is appropriate for
+right-censored survival data — that is, whether the data plausibly contain a
+fraction of subjects who will never experience the event of interest.
+
+Fitting a cure model when follow-up is too short, or when there is no real
+cured fraction, produces biased estimates. cureAssess packages the standard
+screening and diagnostic procedures for that decision into one workflow.
+
+## Installation
+
+Install the released version from CRAN:
+
+``` r
+install.packages("cureAssess")
+```
+
+Or the development version from GitHub:
+
+``` r
+# install.packages("pak")
+pak::pak("GeethanjaleeM/cureAssess")
+```
+
+## The two-stage workflow
+
+**Stage 1 — screening.** Standardize the data, fit matched cure and non-cure
+parametric models, and rank them by AIC. If the smallest-AIC model is a cure
+model, that is initial support for cure modeling.
+
+**Stage 2 — diagnostics.** Run the formal checks for sufficient follow-up and
+for a cured fraction: the Maller-Zhou statistics, Shen's test, an immune
+summary of the Kaplan-Meier tail, and the RECeUS method.
+
+`cure.appropriateness()` runs both stages in one call.
+
+## Example
+
+```{r example}
+library(cureAssess)
+library(survival)
+
+res <- cure.appropriateness(
+  data = gbsg,
+  time = "rfstime",
+  status = "status",
+  time_scale = "days_to_years",
+  plot_km = FALSE,
+  run_tests = "yes"
+)
+
+res
+```
+
+The AIC comparison behind the decision is available directly:
+
+```{r aic-table}
+head(res$screening$aic_table[, c("model", "model_type", "AIC")], 4)
+```
+
+Individual diagnostics can also be run on their own, on data prepared by
+`prepare.surv.data()`:
+
+```{r diagnostics}
+dat <- prepare.surv.data(
+  data = gbsg,
+  time = "rfstime",
+  status = "status",
+  time_scale = "days_to_years"
+)
+
+mz.test(dat)
+receus.method(dat, dist = "lnorm")
+```
+
+Note what the two stages say here. AIC preferred a *cure* model for these
+data, but RECeUS reports that too large a share of uncured subjects is still
+censored at the end of follow-up. A better AIC fit is not on its own evidence
+that a cure fraction can be estimated reliably — which is why the screening
+stage alone is not enough.
+
+For a worked comparison of a data set where a cure model *is* supported
+(`nwtco`) against one where it is *not* (`gbsg`), see the introductory
+vignette:
+
+``` r
+vignette("introduction", package = "cureAssess")
+```
+
+## Interpreting the output
+
+These diagnostics are descriptive aids, not a single decision rule. Sufficient
+follow-up tests ask whether the study ran long enough to tell a genuine cure
+fraction apart from a plateau caused by censoring. Read them together, and
+alongside subject-matter knowledge about whether cure is clinically plausible.
+
+## References
+
+- Maller RA, Zhou S (1992). Estimating the proportion of immunes in a censored
+  sample. *Biometrika*, 79(4), 731–739.
+  <doi:10.1093/biomet/79.4.731>
+- Maller RA, Zhou S (1994). Testing for sufficient follow-up and outliers in
+  survival data. *Journal of the American Statistical Association*, 89(428),
+  1499–1506. <doi:10.1080/01621459.1994.10476889>
+- Shen P-S (2000). Testing for sufficient follow-up in survival data.
+  *Statistics & Probability Letters*, 49(4), 313–322.
+  <doi:10.1016/S0167-7152(00)00063-8>
+- Selukar S, Othus M (2023). RECeUS: Ratio estimation of censored uncured
+  subjects. *Statistics in Medicine*, 42(3), 209–227.
+  <doi:10.1002/sim.9610>
+
+## License
+
+MIT © Geethanjalee Mudunkotuwa
