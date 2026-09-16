@@ -1,0 +1,2049 @@
+/* ===========================================================================
+   cureAssessApp — app/www/app.css
+   The ONLY stylesheet. Bootstrap 5 via bslib 0.12.0, Shiny 1.14, DT 0.34
+   (DataTables 1.13.6).  Owner: builder-css.  Contract: BUILD_CONTRACT §G.
+
+   HOW DARK MODE WORKS HERE
+   bslib::input_dark_mode() stamps data-bs-theme="light"|"dark" on <html> once
+   its JS has run. Before that, nothing is stamped — so first paint is covered
+   by a prefers-color-scheme block, guarded with :not([data-bs-theme="light"])
+   so an explicit light choice always wins. Every token is declared in bare
+   :root first; the dark blocks only REDEFINE values. No component rule ever
+   lives inside a media query or a [data-bs-theme] block, so no colour can
+   exist in one mode only.
+
+   HOW STATE IS CARRIED
+   data-ca-state / data-ca-met set *inherited custom properties*, not colours.
+   That means the attribute may sit on the item or on the link inside it and
+   the descendants still pick up the right ink, tint and hairline. It is the
+   one trick in this file worth knowing before you edit it.
+
+   WHAT ANIMATES: colour and background on hover/focus (140ms), the disclosure
+   caret, and the opacity of a re-rendering output. Nothing else, ever — no
+   statistic, no chip, no layout property, no skeletons (§L.14).
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   1. TOKENS — light. The complete set; the dark blocks below only re-step it.
+   Contrast ratios are measured against --ca-surface for card/chart tokens and
+   against --ca-canvas for page tokens.
+   --------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  /* -- surfaces (cool neutrals, biased a few degrees toward petrol) --------- */
+  --ca-canvas:      #EEF2F3;  /* page plane, behind every card                */
+  --ca-surface:     #FBFCFC;  /* card + chart surface                         */
+  --ca-surface-2:   #F4F7F8;  /* rail, table head, sunk panels                */
+  --ca-surface-3:   #E7ECEE;  /* technical-detail body, disabled              */
+
+  /* -- ink ------------------------------------------------------------------ */
+  --ca-ink:         #11191C;  /* 17.32:1 — headings, statistics               */
+  --ca-ink-2:       #414D52;  /*  8.48:1 — body copy                          */
+  --ca-ink-3:       #667378;  /*  4.76:1 — labels, axis text, meta            */
+  --ca-ink-invert:  #FBFCFC;  /*  8.15:1 on --ca-primary                      */
+
+  /* -- rules ---------------------------------------------------------------- */
+  --ca-rule:        #DBE2E4;  /* hairline, gridline                           */
+  --ca-rule-2:      #C3CDD0;  /* baseline, axis, stronger divider             */
+
+  /* -- brand: one petrol ramp. 600 is the UI primary, 500 is chart series 1 -- */
+  --ca-petrol-50:   #EFF6F9;
+  --ca-petrol-100:  #DCEAF1;
+  --ca-petrol-200:  #B6D5E3;
+  --ca-petrol-300:  #7FB6CE;
+  --ca-petrol-400:  #2E8CB4;
+  --ca-petrol-500:  #00739B;  /*  5.20:1 — series 1, focus ring               */
+  --ca-petrol-600:  #0A5670;  /*  7.93:1 — $primary                           */
+  --ca-petrol-700:  #08404F;
+  --ca-petrol-800:  #062F3A;
+
+  --ca-primary:       var(--ca-petrol-600);
+  --ca-primary-hover: var(--ca-petrol-700);
+  --ca-primary-soft:  var(--ca-petrol-50);
+  --ca-secondary:     #4E6068;
+
+  /* -- status. Reserved meaning. NEVER used for a chart series.
+        Each ink is measured on its own tint, not on the card surface.        */
+  --ca-pass-ink:      #175A2B;
+  --ca-pass-bg:       #E6F3E9;
+  --ca-pass-line:     #B4D7BE;
+  --ca-pass-solid:    #1F7A3D;
+
+  --ca-fail-ink:      #8E2C20;
+  --ca-fail-bg:       #FBEAE6;
+  --ca-fail-line:     #EDC2B8;
+  --ca-fail-solid:    #B03A29;
+
+  --ca-caution-ink:   #7A4E05;
+  --ca-caution-bg:    #FBF1DE;
+  --ca-caution-line:  #E8D0A2;
+  --ca-caution-solid: #C2860E;
+
+  --ca-neutral-ink:   #0A5670;
+  --ca-neutral-bg:    #E6F0F4;
+  --ca-neutral-line:  #BCD5E0;
+
+  --ca-void-ink:      #4B565A;   /* "cannot be computed" — grey, never red    */
+  --ca-void-bg:       #ECEFF0;
+  --ca-void-line:     #CBD3D5;
+
+  /* -- chart series. Mirrored exactly by ca_tokens() in R/theme.R.
+        Cap: 3. A fourth curve means a facet, not a fourth hue.               */
+  --ca-series-1:    #00739B;                 /* petrol — Kaplan-Meier         */
+  --ca-series-2:    #C2571F;                 /* ember  — fitted overlay       */
+  --ca-series-3:    #8D2157;                 /* claret — reserved             */
+  --ca-band:        rgba(0, 115, 155, 0.12); /* KM confidence band            */
+  --ca-censor:      #0A5670;                 /* censoring ticks               */
+  --ca-tail-fill:   #E7ECEE;                 /* follow-up tail band — NEUTRAL */
+  --ca-tail-rule:   #8A979B;                 /* last-event-time rule          */
+
+  /* -- typography. System stacks only: nothing here touches the network at
+        demo time, so there is no cold-cache failure and no FOUT.             */
+  --ca-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                  Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ca-font-serif: Charter, "Bitstream Charter", "Sitka Text", Cambria,
+                  "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --ca-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+                  "Liberation Mono", monospace;
+
+  --ca-t-micro: 0.72rem;   /* uppercase eyebrow labels                        */
+  --ca-t-small: 0.82rem;   /* meta, table cells                               */
+  --ca-t-body:  1rem;      /* base — 17px at the root font size below         */
+  --ca-t-lede:  1.09rem;   /* the plain-language line                         */
+  --ca-t-h3:    1.28rem;   /* card titles                                     */
+  --ca-t-h2:    1.65rem;   /* section titles                                  */
+  --ca-t-h1:    2.10rem;   /* page title                                      */
+  --ca-t-stat:  2.05rem;   /* headline statistic                              */
+  --ca-t-hero:  2.90rem;   /* one per view, Conclusion only                   */
+
+  /* -- 4px spacing scale ---------------------------------------------------- */
+  --ca-s-1: 4px;  --ca-s-2: 8px;  --ca-s-3: 12px; --ca-s-4: 16px;
+  --ca-s-5: 24px; --ca-s-6: 32px; --ca-s-7: 48px; --ca-s-8: 64px;
+
+  /* -- radii. Small and consistent: this is an instrument, not a toy.        */
+  --ca-r-1: 3px;   /* chips, badges, number plates                            */
+  --ca-r-2: 6px;   /* buttons, inputs, inner blocks                           */
+  --ca-r-3: 10px;  /* cards, panels                                           */
+
+  /* -- geometry ------------------------------------------------------------- */
+  --ca-rail-w: 268px;
+  --ca-rail-w-icon: 76px;
+  --ca-measure: 68ch;       /* running-text line length                       */
+  --ca-motion: 140ms;
+  --ca-ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --ca-focus-halo: var(--ca-surface);
+  --ca-focus: 0 0 0 3px var(--ca-focus-halo), 0 0 0 6px var(--ca-petrol-500);
+}
+
+/* ---------------------------------------------------------------------------
+   1b. TOKENS — dark. Same tokens, re-stepped for a dark ground; not inverted.
+   --------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-bs-theme="light"]) {
+    color-scheme: dark;
+    --ca-canvas: #0E1315; --ca-surface: #161D20;
+    --ca-surface-2: #1D2528; --ca-surface-3: #26302F;
+    --ca-ink: #EAF0F1; --ca-ink-2: #AEBCC0; --ca-ink-3: #8A979B;
+    --ca-ink-invert: #0E1315;
+    --ca-rule: #2A3438; --ca-rule-2: #3D4A4F;
+    --ca-petrol-50: #0F2831; --ca-petrol-100: #133544; --ca-petrol-200: #1A4A5E;
+    --ca-petrol-300: #22647E; --ca-petrol-400: #2782A6; --ca-petrol-500: #2E9BC6;
+    --ca-petrol-600: #4FAED3; --ca-petrol-700: #7DC6E1; --ca-petrol-800: #AEDCEC;
+    --ca-primary: #4FAED3; --ca-primary-hover: #7DC6E1;
+    --ca-primary-soft: #132A33; --ca-secondary: #9DAEB4;
+    --ca-pass-ink: #93D6A2; --ca-pass-bg: #14291B;
+    --ca-pass-line: #2C4A33; --ca-pass-solid: #48A861;
+    --ca-fail-ink: #F0A197; --ca-fail-bg: #2E1A17;
+    --ca-fail-line: #543029; --ca-fail-solid: #D4645A;
+    --ca-caution-ink: #E8C275; --ca-caution-bg: #2C2312;
+    --ca-caution-line: #4E3F1F; --ca-caution-solid: #D6A63F;
+    --ca-neutral-ink: #8CCBE2; --ca-neutral-bg: #132A33; --ca-neutral-line: #27454F;
+    --ca-void-ink: #A0ADB1; --ca-void-bg: #1E2629; --ca-void-line: #364044;
+    --ca-series-1: #2E9BC6; --ca-series-2: #D4732F; --ca-series-3: #D8428A;
+    --ca-band: rgba(46, 155, 198, 0.16);
+    --ca-censor: #8CCBE2;
+    --ca-tail-fill: #20292C; --ca-tail-rule: #8A979B;
+  }
+}
+:root[data-bs-theme="dark"] {
+  color-scheme: dark;
+  --ca-canvas: #0E1315; --ca-surface: #161D20;
+  --ca-surface-2: #1D2528; --ca-surface-3: #26302F;
+  --ca-ink: #EAF0F1; --ca-ink-2: #AEBCC0; --ca-ink-3: #8A979B;
+  --ca-ink-invert: #0E1315;
+  --ca-rule: #2A3438; --ca-rule-2: #3D4A4F;
+  --ca-petrol-50: #0F2831; --ca-petrol-100: #133544; --ca-petrol-200: #1A4A5E;
+  --ca-petrol-300: #22647E; --ca-petrol-400: #2782A6; --ca-petrol-500: #2E9BC6;
+  --ca-petrol-600: #4FAED3; --ca-petrol-700: #7DC6E1; --ca-petrol-800: #AEDCEC;
+  --ca-primary: #4FAED3; --ca-primary-hover: #7DC6E1;
+  --ca-primary-soft: #132A33; --ca-secondary: #9DAEB4;
+  --ca-pass-ink: #93D6A2; --ca-pass-bg: #14291B;
+  --ca-pass-line: #2C4A33; --ca-pass-solid: #48A861;
+  --ca-fail-ink: #F0A197; --ca-fail-bg: #2E1A17;
+  --ca-fail-line: #543029; --ca-fail-solid: #D4645A;
+  --ca-caution-ink: #E8C275; --ca-caution-bg: #2C2312;
+  --ca-caution-line: #4E3F1F; --ca-caution-solid: #D6A63F;
+  --ca-neutral-ink: #8CCBE2; --ca-neutral-bg: #132A33; --ca-neutral-line: #27454F;
+  --ca-void-ink: #A0ADB1; --ca-void-bg: #1E2629; --ca-void-line: #364044;
+  --ca-series-1: #2E9BC6; --ca-series-2: #D4732F; --ca-series-3: #D8428A;
+  --ca-band: rgba(46, 155, 198, 0.16);
+  --ca-censor: #8CCBE2;
+  --ca-tail-fill: #20292C; --ca-tail-rule: #8A979B;
+}
+
+/* ---------------------------------------------------------------------------
+   1c. STATE TOKENS. data-ca-state and data-ca-met set INHERITED properties, so
+   the attribute may sit on the wrapper or on the control inside it and every
+   descendant still resolves to the right ink / tint / hairline.
+   Rail values:  locked | ready | done        Step values: pending|pass|fail|void
+   --------------------------------------------------------------------------- */
+[data-ca-state="locked"],
+[data-ca-state="void"],
+[data-ca-state="pending"] {
+  --ca-state-ink:  var(--ca-ink-3);
+  --ca-state-bg:   var(--ca-void-bg);
+  --ca-state-line: var(--ca-void-line);
+}
+[data-ca-state="void"] { --ca-state-ink: var(--ca-void-ink); }
+[data-ca-state="ready"] {
+  --ca-state-ink:  var(--ca-primary);
+  --ca-state-bg:   var(--ca-petrol-100);
+  --ca-state-line: var(--ca-petrol-200);
+}
+[data-ca-state="done"],
+[data-ca-state="pass"],
+[data-ca-met="true"] {
+  --ca-state-ink:  var(--ca-pass-ink);
+  --ca-state-bg:   var(--ca-pass-bg);
+  --ca-state-line: var(--ca-pass-line);
+}
+[data-ca-state="fail"],
+[data-ca-met="false"] {
+  --ca-state-ink:  var(--ca-fail-ink);
+  --ca-state-bg:   var(--ca-fail-bg);
+  --ca-state-line: var(--ca-fail-line);
+}
+
+/* ---------------------------------------------------------------------------
+   1d. BRIDGE — hand the tokens to Bootstrap so stock components follow.
+   Declared for all three root states at once, so it is never mode-specific.
+   --------------------------------------------------------------------------- */
+:root,
+:root[data-bs-theme="dark"],
+:root[data-bs-theme="light"] {
+  --bs-body-bg: var(--ca-canvas);
+  --bs-body-color: var(--ca-ink);
+  --bs-emphasis-color: var(--ca-ink);
+  --bs-secondary-color: var(--ca-ink-2);
+  --bs-tertiary-color: var(--ca-ink-3);
+  --bs-secondary-bg: var(--ca-surface-2);
+  --bs-tertiary-bg: var(--ca-surface-3);
+  --bs-border-color: var(--ca-rule);
+  --bs-link-color: var(--ca-primary);
+  --bs-link-hover-color: var(--ca-primary-hover);
+  --bs-code-color: var(--ca-ink-2);
+  --bs-card-bg: var(--ca-surface);
+  --bs-card-border-color: var(--ca-rule);
+  --bs-card-cap-bg: var(--ca-surface-2);
+  --bs-border-radius: var(--ca-r-2);
+  --bs-border-radius-sm: var(--ca-r-1);
+  --bs-border-radius-lg: var(--ca-r-3);
+  --bs-focus-ring-color: color-mix(in srgb, var(--ca-petrol-500) 45%, transparent);
+  --bs-heading-color: var(--ca-ink);
+}
+
+/* ===========================================================================
+   2. BASE
+   =========================================================================== */
+html { font-size: 17px; }          /* §8.1: body copy readable at three metres */
+
+body {
+  background: var(--ca-canvas);
+  color: var(--ca-ink);
+  font-family: var(--ca-font-sans);
+  font-size: var(--ca-t-body);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--ca-font-serif);
+  font-weight: 600;
+  color: var(--ca-ink);
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+  margin: 0;
+}
+h1 { font-size: var(--ca-t-h1); line-height: 1.16; }
+h2 { font-size: var(--ca-t-h2); line-height: 1.22; }
+h3 { font-size: var(--ca-t-h3); line-height: 1.30; }
+h4 { font-size: 1.08rem; line-height: 1.35; }
+
+p { margin: 0; max-width: var(--ca-measure); }
+p + p { margin-top: var(--ca-s-3); }
+strong, b { font-weight: 650; color: var(--ca-ink); }
+ul, ol { margin: 0; padding-left: 1.3em; }
+li + li { margin-top: var(--ca-s-1); }
+hr { border: 0; border-top: 1px solid var(--ca-rule); margin: var(--ca-s-5) 0; opacity: 1; }
+
+a { color: var(--ca-primary); text-underline-offset: 0.18em; }
+a:hover { color: var(--ca-primary-hover); }
+
+code, kbd, samp, pre, .ca-mono {
+  font-family: var(--ca-font-mono);
+  font-size: 0.9em;
+  font-variant-ligatures: none;
+}
+code { color: var(--ca-ink); background: var(--ca-surface-3);
+       padding: 0.08em 0.32em; border-radius: var(--ca-r-1); }
+
+/* Focus. One ring, everywhere, on every interactive element — including the
+   ones Shiny generates and the ones Bootstrap styles itself. */
+:where(a, button, input, select, textarea, summary, details, [tabindex],
+       .action-button, .form-check-input, .accordion-button,
+       .selectize-input, .irs-handle):focus-visible {
+  outline: none;
+  box-shadow: var(--ca-focus);
+  border-radius: var(--ca-r-1);
+}
+:where(.ca-rail, .ca-note, .ca-tech__body, .ca-sens, .ca-statrow) { --ca-focus-halo: var(--ca-surface-2); }
+
+/* Utilities named in §G. */
+.ca-mono { font-variant-numeric: tabular-nums; }
+.ca-lede {
+  font-family: var(--ca-font-sans);
+  font-size: var(--ca-t-lede);
+  line-height: 1.5;
+  color: var(--ca-ink-2);
+  max-width: 62ch;
+}
+.ca-hidden-visually {
+  position: absolute !important;
+  width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap; border: 0;
+}
+/* A re-rendering output holds its previous content at reduced opacity, so
+   nothing jumps and no skeleton is needed (§L.14). */
+.is-stale,
+.shiny-bound-output.recalculating {
+  opacity: 0.45;
+  transition: opacity var(--ca-motion) var(--ca-ease);
+}
+
+/* ===========================================================================
+   3. LAYOUT — shell, main column, sections, hero
+   =========================================================================== */
+.ca-shell {
+  display: grid;
+  grid-template-columns: var(--ca-rail-w) minmax(0, 1fr);
+  gap: var(--ca-s-5);
+  align-items: start;
+  padding: var(--ca-s-5);
+  max-width: 1600px;
+  margin-inline: auto;
+}
+.ca-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-5);
+  min-width: 0;
+}
+/* navset_hidden wraps each panel; it must not introduce its own box. */
+.ca-main .tab-content,
+.ca-main .tab-pane {
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.ca-main .tab-pane { display: none; }
+.ca-main .tab-pane.active { display: flex; flex-direction: column; gap: var(--ca-s-5); }
+
+.ca-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-4);
+  min-width: 0;
+}
+.ca-section__title {
+  font-family: var(--ca-font-serif);
+  font-size: var(--ca-t-h2);
+  font-weight: 600;
+  line-height: 1.22;
+  color: var(--ca-ink);
+  padding-bottom: var(--ca-s-3);
+  border-bottom: 1px solid var(--ca-rule);
+  text-wrap: balance;
+}
+.ca-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ca-s-4);
+  align-items: start;
+}
+
+/* The page's one display block: title + standfirst. One per view. */
+.ca-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-3);
+  padding: var(--ca-s-6) var(--ca-s-6) var(--ca-s-5);
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-3);
+  /* the plateau rule: the shape the whole app is about, drawn once, at the top */
+  box-shadow: inset 0 3px 0 0 var(--ca-primary);
+}
+.ca-hero > h1,
+.ca-hero > h2 {
+  font-size: var(--ca-t-hero);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  max-width: 22ch;
+}
+.ca-hero > p { font-size: var(--ca-t-lede); color: var(--ca-ink-2); max-width: 64ch; }
+
+/* The dark-mode toggle floats clear of the content instead of pushing it. */
+bslib-input-dark-mode {
+  position: fixed;
+  top: var(--ca-s-3);
+  right: var(--ca-s-3);
+  z-index: 1040;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  color: var(--ca-ink-2);
+}
+
+/* ===========================================================================
+   4. THE LEFT RAIL
+
+   Markup (helpers.R ca_rail(); §F.15, §E.2):
+     <nav class="ca-rail" aria-label="...">
+       [optional <ul>/<ol>]
+         <li class="ca-rail__item">                       (or a plain div)
+           <a class="ca-rail__link action-button" id="nav_data"
+              data-ca-state="ready" aria-current="page" aria-disabled="false">
+             <span class="ca-rail__num">2</span>
+             <span class="ca-rail__glyph">…16-20px inline svg…</span>
+             <span class="ca-rail__label">Data</span>
+             <span class="ca-rail__state">Ready</span>
+           </a>
+
+   Every part except .ca-rail__link and .ca-rail__label is optional: a missing
+   .ca-rail__state is replaced by a CSS state glyph, and a missing
+   .ca-rail__glyph collapses its column rather than leaving a hole.
+   A LOCKED item is styled, never disabled: it keeps its place in the tab order
+   and it still navigates (§E.2).
+   =========================================================================== */
+.ca-rail {
+  position: sticky;
+  top: var(--ca-s-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-2);
+  padding: var(--ca-s-4) var(--ca-s-3) var(--ca-s-3);
+  background: var(--ca-surface-2);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-3);
+}
+.ca-rail > ul,
+.ca-rail > ol,
+.ca-rail ul.ca-rail__list,
+.ca-rail ol.ca-rail__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-1);
+  width: 100%;
+}
+.ca-rail > ul > li,
+.ca-rail > ol > li { margin: 0; }
+.ca-rail__item { position: relative; display: block; margin: 0; }
+
+/* The staircase: a 2px connector between consecutive number plates, coloured
+   by the state of the step above it. That filled run is literally "how far you
+   have got" — real progress information, not decoration. */
+.ca-rail__item + .ca-rail__item .ca-rail__num::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  bottom: 100%;
+  width: 2px;
+  height: calc(var(--ca-s-1) + var(--ca-s-2));
+  background: var(--ca-rule-2);
+}
+.ca-rail__item:has([data-ca-state="done"]) + .ca-rail__item .ca-rail__num::before,
+.ca-rail__item[data-ca-state="done"] + .ca-rail__item .ca-rail__num::before {
+  background: var(--ca-primary);
+}
+
+.ca-rail__link {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px auto minmax(0, 1fr);
+  grid-template-areas:
+    "num glyph label"
+    ".   .     state";
+  align-items: center;
+  column-gap: var(--ca-s-2);
+  row-gap: 2px;
+  padding: var(--ca-s-2) var(--ca-s-3) var(--ca-s-2) var(--ca-s-2);
+  border: 1px solid transparent;
+  border-radius: var(--ca-r-2);
+  background: transparent;
+  color: var(--ca-ink-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--ca-motion) var(--ca-ease),
+              color var(--ca-motion) var(--ca-ease);
+}
+.ca-rail__link:hover { text-decoration: none; }
+/* Shiny 1.14's actionLink() wraps its label in <span class="action-label">, so
+   the four spans below arrive as grandchildren. display:contents lifts them
+   back into the link's own grid; without this the rail collapses to one
+   26px column and every label wraps a character at a time. */
+.ca-rail__link > .action-label { display: contents; }
+
+.ca-rail__num {
+  grid-area: num;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 26px; height: 26px;
+  border-radius: var(--ca-r-1);
+  border: 1px solid var(--ca-state-line, transparent);
+  background: var(--ca-state-bg, var(--ca-surface-3));
+  color: var(--ca-state-ink, var(--ca-ink-3));
+  font-family: var(--ca-font-mono);
+  font-size: var(--ca-t-small);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ca-rail__glyph {
+  grid-area: glyph;
+  display: grid;
+  place-items: center;
+  color: inherit;
+}
+.ca-rail__glyph:empty { display: none; }
+.ca-rail__glyph svg { display: block; width: 20px; height: 20px; }
+.ca-rail__label {
+  grid-area: label;
+  font-size: var(--ca-t-body);
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.ca-rail__state {
+  grid-area: state;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--ca-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--ca-state-ink, var(--ca-ink-3));
+}
+.ca-rail__state svg { display: block; width: 13px; height: 13px; }
+
+/* If the rail was built without a .ca-rail__state element, draw the state as a
+   masked glyph instead: lock / hollow ring / check. Shape carries it, so the
+   state is never colour alone. */
+.ca-rail__link:not(:has(.ca-rail__state))::after {
+  content: "";
+  position: absolute;
+  top: 50%; right: var(--ca-s-3);
+  translate: 0 -50%;
+  width: 15px; height: 15px;
+  background-color: var(--ca-state-ink, var(--ca-ink-3));
+  -webkit-mask: var(--ca-state-glyph, none) center / contain no-repeat;
+  mask: var(--ca-state-glyph, none) center / contain no-repeat;
+}
+[data-ca-state="locked"] {
+  --ca-state-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'%3E%3Crect x='3.5' y='7' width='9' height='6.5' rx='1.2'/%3E%3Cpath d='M5.7 7V5.2a2.3 2.3 0 0 1 4.6 0V7'/%3E%3C/svg%3E");
+}
+[data-ca-state="ready"] {
+  --ca-state-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.8'%3E%3Ccircle cx='8' cy='8' r='4.6'/%3E%3C/svg%3E");
+}
+[data-ca-state="done"] {
+  --ca-state-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.2 3.2L13 4.8'/%3E%3C/svg%3E");
+}
+
+/* -- completion states ------------------------------------------------------ */
+.ca-rail__link[data-ca-state="done"],
+[data-ca-state="done"] > .ca-rail__link { color: var(--ca-ink); }
+.ca-rail__link[data-ca-state="done"] .ca-rail__num,
+[data-ca-state="done"] .ca-rail__num {
+  background: var(--ca-primary);
+  border-color: var(--ca-primary);
+  color: var(--ca-ink-invert);
+}
+.ca-rail__link[data-ca-state="ready"],
+[data-ca-state="ready"] > .ca-rail__link { color: var(--ca-ink); }
+.ca-rail__link[data-ca-state="locked"],
+[data-ca-state="locked"] > .ca-rail__link { color: var(--ca-ink-3); }
+.ca-rail__link[data-ca-state="locked"] .ca-rail__glyph,
+[data-ca-state="locked"] .ca-rail__glyph { opacity: 0.6; }
+
+/* -- interaction. A locked item still responds: clicking it navigates, and the
+      destination's own empty state explains what is missing (§E.2). --------- */
+.ca-rail__link:hover { background: var(--ca-surface); color: var(--ca-ink); }
+.ca-rail__link:focus-visible { background: var(--ca-surface); }
+.ca-rail__link[aria-disabled="true"] { cursor: default; }
+.ca-rail__link[aria-disabled="true"]:hover { background: color-mix(in srgb, var(--ca-surface) 55%, transparent); }
+
+/* Active. A 2px petrol line across the top of the item; no left accent bar. */
+.ca-rail__link[aria-current="page"],
+.ca-rail__link.active {
+  background: var(--ca-surface);
+  border-color: var(--ca-rule);
+  color: var(--ca-ink);
+  box-shadow: inset 0 2px 0 0 var(--ca-primary);
+}
+.ca-rail__link[aria-current="page"] .ca-rail__label,
+.ca-rail__link.active .ca-rail__label { font-weight: 650; }
+
+/* ===========================================================================
+   5. THE CARD — the diagnostic card and every other panel
+   <section class="ca-card">
+     <header class="ca-card__head">
+       <h3 class="ca-card__title">Maller-Zhou test (1994)</h3>
+       <span class="ca-chip ca-chip--pass">…</span></header>
+     <p class="ca-card__lede">…</p>
+     <div class="ca-card__body">
+       <p class="ca-stat"><span class="ca-stat__value">0.0495</span>
+          <span class="ca-stat__label">statistic</span></p>
+       <p class="ca-threshold">…</p>
+       <details class="ca-tech">…</details></div>
+     <footer class="ca-card__foot">…</footer></section>
+   =========================================================================== */
+.ca-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-3);
+  padding: var(--ca-s-5);
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-3);
+  min-width: 0;
+}
+.ca-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ca-s-3);
+  flex-wrap: wrap;
+}
+.ca-card__title {
+  font-family: var(--ca-font-serif);
+  font-size: var(--ca-t-h3);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ca-ink);
+  margin: 0;
+}
+.ca-card__lede {
+  font-size: var(--ca-t-lede);
+  line-height: 1.5;
+  color: var(--ca-ink-2);
+  max-width: 56ch;
+}
+.ca-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-3);
+  min-width: 0;
+}
+.ca-card__foot {
+  margin-top: var(--ca-s-1);
+  padding-top: var(--ca-s-3);
+  border-top: 1px solid var(--ca-rule);
+  font-size: var(--ca-t-small);
+  color: var(--ca-ink-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ca-s-3);
+}
+
+/* -- the headline statistic ------------------------------------------------- */
+.ca-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ca-s-2);
+  margin-block: var(--ca-s-1);
+  flex-wrap: wrap;
+}
+/* INTEGRATOR: a card carrying ONE statistic reads best as "Statistic 0.0495"
+   on a single baseline. A card carrying several (the immune summary has four)
+   looked ragged, because each value started wherever its own label ended. As
+   soon as a .ca-stat has a sibling, the pair becomes a two-column row and
+   every value in the card lines up on the same right edge. */
+.ca-stat:has(+ .ca-stat),
+.ca-stat + .ca-stat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--ca-s-4);
+  margin-block: var(--ca-s-2);
+}
+.ca-stat:has(+ .ca-stat) .ca-stat__value,
+.ca-stat + .ca-stat .ca-stat__value { justify-self: end; text-align: right; }
+.ca-stat__value {
+  font-family: var(--ca-font-sans);
+  font-size: var(--ca-t-stat);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--ca-ink);
+  font-variant-numeric: proportional-nums;
+}
+.ca-stat__label {
+  font-size: var(--ca-t-small);
+  color: var(--ca-ink-3);
+  letter-spacing: 0.01em;
+}
+/* The em dash shown when a statistic cannot be computed. Never the text "NA",
+   never red: an undefined statistic is a property of the data (R7). */
+.ca-stat--void .ca-stat__value { color: var(--ca-void-ink); font-weight: 400; }
+.ca-stat--void .ca-stat__label { color: var(--ca-void-ink); }
+
+/* -- the threshold line. It is a rule because a threshold IS a line. Both the
+      number and the DIRECTION are visible; reversing the direction is R13. -- */
+.ca-threshold {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--ca-s-2);
+  padding-top: var(--ca-s-3);
+  border-top: 1px solid var(--ca-rule);
+  font-size: var(--ca-t-small);
+  color: var(--ca-ink-2);
+}
+.ca-threshold__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--ca-ink);
+}
+/* INTEGRATOR: was `white-space: nowrap`, which is fine for "SMALLER IS BETTER
+   ..." but let qn's longer "LARGER IS BETTER - ABOVE THE THRESHOLD SUPPORTS
+   SUFFICIENT FOLLOW-UP" run straight out of its card. It wraps now, and the
+   pill is a block so the two lines stay inside one border. */
+.ca-threshold__dir {
+  display: block;
+  font-size: var(--ca-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  color: var(--ca-ink-3);
+  border: 1px solid var(--ca-rule-2);
+  border-radius: var(--ca-r-1);
+  padding: 2px var(--ca-s-2);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* ===========================================================================
+   6. CHIPS — five variants, every one carrying a glyph AND a word (§F.8)
+   =========================================================================== */
+.ca-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px var(--ca-s-2) 3px 6px;
+  border: 1px solid;
+  border-radius: var(--ca-r-1);
+  font-size: var(--ca-t-small);
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.ca-chip svg { display: block; width: 15px; height: 15px; flex: none; }
+.ca-chip--pass    { color: var(--ca-pass-ink);    background: var(--ca-pass-bg);    border-color: var(--ca-pass-line); }
+.ca-chip--fail    { color: var(--ca-fail-ink);    background: var(--ca-fail-bg);    border-color: var(--ca-fail-line); }
+.ca-chip--caution { color: var(--ca-caution-ink); background: var(--ca-caution-bg); border-color: var(--ca-caution-line); }
+.ca-chip--neutral { color: var(--ca-neutral-ink); background: var(--ca-neutral-bg); border-color: var(--ca-neutral-line); }
+.ca-chip--void    { color: var(--ca-void-ink);    background: var(--ca-void-bg);    border-color: var(--ca-void-line);
+                    font-weight: 500; }
+/* A chip long enough to be a sentence is allowed to wrap rather than overflow. */
+.ca-chip:not(:only-child) { max-width: 100%; }
+.ca-card__head .ca-chip { white-space: normal; text-align: left; }
+
+/* ===========================================================================
+   7. DISCLOSURE AND PROVENANCE
+   =========================================================================== */
+.ca-tech {
+  border-top: 1px solid var(--ca-rule);
+  padding-top: var(--ca-s-2);
+  min-width: 0;
+}
+.ca-tech > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ca-s-2);
+  padding: var(--ca-s-1) 0;
+  font-size: var(--ca-t-small);
+  font-weight: 600;
+  color: var(--ca-ink-2);
+}
+.ca-tech > summary::-webkit-details-marker { display: none; }
+.ca-tech > summary::before {
+  content: "";
+  flex: none;
+  width: 7px; height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  rotate: -45deg;
+  translate: 0 -1px;
+  transition: rotate var(--ca-motion) var(--ca-ease);
+}
+.ca-tech[open] > summary::before { rotate: 45deg; translate: 0 -2px; }
+.ca-tech > summary:hover { color: var(--ca-ink); }
+.ca-tech__body {
+  margin-top: var(--ca-s-2);
+  padding: var(--ca-s-3);
+  background: var(--ca-surface-3);
+  border-radius: var(--ca-r-2);
+  font-size: var(--ca-t-small);
+  line-height: 1.6;
+  color: var(--ca-ink-2);
+  overflow-wrap: anywhere;
+}
+.ca-tech__body > * + * { margin-top: var(--ca-s-2); }
+.ca-tech__body code { background: transparent; padding: 0; color: var(--ca-ink); }
+
+/* One monospace line saying where a number came from:
+   cure.appropriateness() -> $tests$receus$r_hat                        (§F.16) */
+.ca-provenance {
+  font-family: var(--ca-font-mono);
+  font-size: var(--ca-t-micro);
+  line-height: 1.5;
+  color: var(--ca-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* The Documentation tab's field-by-field provenance table. */
+.ca-provenance-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ca-t-small);
+  color: var(--ca-ink-2);
+}
+.ca-provenance-table th {
+  text-align: left;
+  font-size: var(--ca-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ca-ink-3);
+  padding: var(--ca-s-2) var(--ca-s-3) var(--ca-s-2) 0;
+  border-bottom: 1px solid var(--ca-rule-2);
+  white-space: nowrap;
+}
+.ca-provenance-table td {
+  padding: var(--ca-s-2) var(--ca-s-3) var(--ca-s-2) 0;
+  border-bottom: 1px solid var(--ca-rule);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.ca-provenance-table td:not(:first-child) {
+  font-family: var(--ca-font-mono);
+  font-size: 0.95em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ca-ink);
+}
+.ca-provenance-table tr:last-child td { border-bottom: 0; }
+
+/* Tooltip trigger (§F.12). Dotted underline + a small info glyph: discoverable
+   without being loud, and it never looks like a link. */
+.ca-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+  border-bottom: 1px dotted var(--ca-rule-2);
+  color: inherit;
+}
+.ca-tip svg { display: block; width: 14px; height: 14px; color: var(--ca-ink-3); flex: none; }
+.ca-tip:hover svg { color: var(--ca-primary); }
+
+/* ===========================================================================
+   8. THE THREE-STEP STRIP (Conclusion) — manuscript order, always 1-2-3
+   <ol class="ca-steps">
+     <li class="ca-step" data-ca-state="pending">
+       <span class="ca-step__rail"><span class="ca-step__marker">1</span></span>
+       <div class="ca-step__body">
+         <h3 class="ca-step__title">Expert judgment</h3> … </div></li>
+   data-ca-state = pending | pass | fail | void
+   =========================================================================== */
+.ca-steps {
+  list-style: none;
+  margin: 0;
+  padding: var(--ca-s-5);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-3);
+}
+.ca-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-3);
+  min-width: 0;
+  margin: 0;
+}
+/* The connector lives in the step's own marker row and flexes to fill the rest
+   of the grid cell, so it starts on this marker and ends where the next one
+   begins. It carries the state of the step it LEAVES: the chain visibly stops
+   where the workflow stopped. */
+.ca-step__rail { display: flex; align-items: center; }
+.ca-step:not(:last-child) .ca-step__rail::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 2px;
+  margin-left: var(--ca-s-1);
+  background: var(--ca-state-line, var(--ca-rule-2));
+}
+.ca-step__marker {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 36px; height: 36px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--ca-state-line, var(--ca-rule-2));
+  background: var(--ca-state-bg, var(--ca-surface));
+  color: var(--ca-state-ink, var(--ca-ink-3));
+  box-shadow: 0 0 0 4px var(--ca-surface);   /* the ring that clears the line */
+  font-family: var(--ca-font-mono);
+  font-size: var(--ca-t-small);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ca-step__marker svg { display: block; width: 18px; height: 18px; }
+
+/* NOT-YET-DONE vs FAILED — the distinction the strip exists to make.
+   pending: hollow, neutral, keeps its NUMBER; nothing has been decided.
+   fail:    filled tint, fail ink, the number replaced by a cross glyph.
+   Shape and glyph carry it, not colour. */
+.ca-step[data-ca-state="pending"] .ca-step__marker {
+  background: var(--ca-surface);
+  border-color: var(--ca-rule-2);
+  color: var(--ca-ink-3);
+}
+.ca-step[data-ca-state="pass"] .ca-step__marker { border-color: var(--ca-pass-ink); }
+.ca-step[data-ca-state="fail"] .ca-step__marker { border-color: var(--ca-fail-ink); }
+
+.ca-step__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ca-s-2);
+  padding-right: var(--ca-s-5);
+  min-width: 0;
+  font-size: var(--ca-t-small);
+  line-height: 1.55;
+  color: var(--ca-ink-2);
+}
+.ca-step__body p { font-size: var(--ca-t-small); max-width: 42ch; }
+.ca-step__title {
+  font-family: var(--ca-font-serif);
+  font-size: var(--ca-t-h3);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ca-ink);
+  margin: 0;
+}
+/* The step-3 headline is a recommendation banner nested in the strip: let it
+   sit flush rather than becoming a card inside a card. */
+.ca-step__body .ca-rec { padding: var(--ca-s-3) var(--ca-s-4); width: 100%; }
+.ca-step__body .ca-rec__decision { font-size: var(--ca-t-h3); }
+
+/* ===========================================================================
+   9. SUMMARY STAT ROW (§F.18) — six numbers, ONE object
+   Not six cards: border, fill and shadow are spent on things that are separate
+   objects, and these six are a single reading of one dataset.
+   =========================================================================== */
+/* INTEGRATOR: this was a hard `repeat(6, 1fr)`. On the Data tab the row sits
+   beside the dataset sidebar, so each of the six cells got about 70px - too
+   narrow for a four-digit number, and the labels and footnotes shredded into
+   three and five lines. auto-fit with a 132px floor keeps one row of six on a
+   wide card and folds to three-by-two, then two-by-three, as the card
+   narrows. The dividers follow the wrap instead of the nth-child. */
+.ca-statrow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  margin: 0;
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-3);
+  overflow: hidden;
+}
+.ca-statrow__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--ca-s-4) var(--ca-s-4) var(--ca-s-3);
+  box-shadow: -1px 0 0 0 var(--ca-rule), 0 -1px 0 0 var(--ca-rule);
+  min-width: 0;
+}
+.ca-statrow__label,
+.ca-statrow__cell > dt {
+  font-size: var(--ca-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ca-ink-3);
+}
+.ca-statrow__value,
+.ca-statrow__cell > dd {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--ca-ink);
+  font-variant-numeric: proportional-nums;
+}
+.ca-statrow__note {
+  font-size: var(--ca-t-micro);
+  line-height: 1.4;
+  color: var(--ca-ink-3);
+  max-width: none;
+}
+/* Label, value and note line up across all six cells even when one label wraps
+   to two lines — six numbers read as one row only if they sit on one baseline. */
+@supports (grid-template-rows: subgrid) {
+  .ca-statrow__cell {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 3;
+    align-content: start;
+  }
+}
+
+/* ===========================================================================
+   10. RECOMMENDATION BANNER — one variant per RECeUS decision string (§J.8)
+   "Cure model appropriate"                   -> .ca-rec--appropriate
+   "Cure model not supported"                 -> .ca-rec--unsupported
+   "Follow-up insufficient for cure modeling" -> .ca-rec--insufficient
+   The decision is printed verbatim in .ca-rec__decision; the class never
+   paraphrases it.
+   =========================================================================== */
+.ca-rec {
+  display: flow-root;
+  padding: var(--ca-s-5);
+  background: var(--ca-rec-bg, var(--ca-surface));
+  border: 1px solid var(--ca-rec-line, var(--ca-rule));
+  border-left: 4px solid var(--ca-rec-line, var(--ca-rule));
+  border-radius: var(--ca-r-3);
+  min-width: 0;
+}
+.ca-rec > * + * { margin-top: var(--ca-s-3); }
+/* The variant glyph, drawn in CSS so the banner needs no extra markup, and
+   masked rather than painted so it re-inks itself in dark mode. Suppressed
+   when the builder supplied an inline SVG of its own. */
+.ca-rec:not(:has(svg))::before {
+  content: "";
+  display: block;
+  width: 30px; height: 30px;
+  margin-bottom: var(--ca-s-3);
+  background-color: var(--ca-rec-ink, var(--ca-ink-3));
+  -webkit-mask: var(--ca-rec-glyph, none) center / contain no-repeat;
+  mask: var(--ca-rec-glyph, none) center / contain no-repeat;
+}
+.ca-rec > svg { width: 30px; height: 30px; color: var(--ca-rec-ink, var(--ca-ink-2)); }
+.ca-rec__decision {
+  font-family: var(--ca-font-serif);
+  font-size: var(--ca-t-h2);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ca-ink);
+  text-wrap: balance;
+  max-width: 24ch;
+  margin: 0;
+}
+.ca-rec__conditions {
+  list-style: none;
+  margin: var(--ca-s-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ca-rec__cond {
+  display: flex;
+  align-items: center;
+  gap: var(--ca-s-2);
+  margin: 0;
+  font-size: var(--ca-t-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--ca-state-ink, var(--ca-ink-2));
+}
+.ca-rec__cond svg { display: block; width: 15px; height: 15px; flex: none; }
+/* Met/unmet is glyph + ink; when no glyph was supplied, CSS draws one. */
+.ca-rec__cond:not(:has(svg))::before {
+  content: "";
+  flex: none;
+  width: 15px; height: 15px;
+  background-color: currentColor;
+  -webkit-mask: var(--ca-met-glyph, none) center / contain no-repeat;
+  mask: var(--ca-met-glyph, none) center / contain no-repeat;
+}
+[data-ca-met="true"] {
+  --ca-met-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.2 3.2L13 4.8'/%3E%3C/svg%3E");
+}
+[data-ca-met="false"] {
+  --ca-met-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 4l8 8M12 4l-8 8'/%3E%3C/svg%3E");
+}
+.ca-rec__cond code { background: transparent; padding: 0; color: inherit; }
+
+.ca-rec--appropriate {
+  --ca-rec-line: var(--ca-pass-line);
+  --ca-rec-bg: var(--ca-pass-bg);
+  --ca-rec-ink: var(--ca-pass-ink);
+  --ca-rec-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='8' cy='8' r='6.2'/%3E%3Cpath d='M4.9 8.3l2.2 2.2 4.1-4.6'/%3E%3C/svg%3E");
+}
+.ca-rec--unsupported {
+  --ca-rec-line: var(--ca-fail-line);
+  --ca-rec-bg: var(--ca-fail-bg);
+  --ca-rec-ink: var(--ca-fail-ink);
+  --ca-rec-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='8' cy='8' r='6.2'/%3E%3Cpath d='M5.5 5.5l5 5M10.5 5.5l-5 5'/%3E%3C/svg%3E");
+}
+.ca-rec--insufficient {
+  --ca-rec-line: var(--ca-caution-line);
+  --ca-rec-bg: var(--ca-caution-bg);
+  --ca-rec-ink: var(--ca-caution-ink);
+  --ca-rec-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 1.9l6.4 11.7H1.6z'/%3E%3Cpath d='M8 6.2v3.4'/%3E%3Cpath d='M8 11.8v.1'/%3E%3C/svg%3E");
+}
+
+/* ===========================================================================
+   11. CALLOUTS, READING LIST, KEYS AND BANNERS
+   .ca-note is built by ca_note(variant, title, body) (§F.10). The glyph column
+   is drawn in CSS, so the helper needs no icon of its own; if it supplies one,
+   it lands in the glyph column instead.
+   =========================================================================== */
+.ca-note {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: var(--ca-s-3);
+  row-gap: var(--ca-s-2);
+  padding: var(--ca-s-4);
+  border: 1px solid var(--ca-rule);
+  border-left-width: 3px;
+  border-left-color: var(--ca-note-line, var(--ca-rule-2));
+  border-radius: var(--ca-r-2);
+  background: var(--ca-note-bg, var(--ca-surface-2));
+  color: var(--ca-note-ink, var(--ca-ink-2));
+  font-size: var(--ca-t-small);
+  line-height: 1.6;
+}
+.ca-note > * { grid-column: 2; min-width: 0; }
+/* Set --ca-note-glyph-size: 0 inline on a note whose own title copy already
+   carries a symbol (§J.2's "⚠ A plateau is not proof"), to avoid two. */
+.ca-note::before {
+  content: "";
+  grid-column: 1;
+  grid-row: 1;
+  width: var(--ca-note-glyph-size, 20px);
+  height: var(--ca-note-glyph-size, 20px);
+  margin-top: 1px;
+  background-color: var(--ca-note-line, var(--ca-ink-3));
+  -webkit-mask: var(--ca-note-glyph) center / contain no-repeat;
+  mask: var(--ca-note-glyph) center / contain no-repeat;
+}
+.ca-note > svg:first-child {
+  grid-column: 1;
+  grid-row: 1;
+  width: 20px; height: 20px;
+  color: var(--ca-note-line, var(--ca-ink-3));
+}
+.ca-note:has(> svg:first-child)::before { display: none; }
+.ca-note__title {
+  font-family: var(--ca-font-sans);
+  font-size: var(--ca-t-body);
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--ca-note-ink, var(--ca-ink));
+  margin: 0;
+}
+.ca-note__body { min-width: 0; }
+.ca-note__body > * + * { margin-top: var(--ca-s-3); }
+.ca-note__body h3,
+.ca-note__body h4 {
+  font-family: var(--ca-font-sans);
+  font-size: var(--ca-t-body);
+  font-weight: 650;
+  color: var(--ca-note-ink, var(--ca-ink));
+}
+.ca-note b, .ca-note strong { color: var(--ca-note-ink, var(--ca-ink)); }
+
+.ca-note--info {
+  --ca-note-line: var(--ca-neutral-line);
+  --ca-note-bg: var(--ca-surface-2);
+  --ca-note-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='8' cy='8' r='6'/%3E%3Cpath d='M8 7.3v4'/%3E%3Cpath d='M8 4.9v.1'/%3E%3C/svg%3E");
+}
+.ca-note--info::before { background-color: var(--ca-neutral-ink); }
+.ca-note--warning {
+  --ca-note-line: var(--ca-caution-solid);
+  --ca-note-bg: var(--ca-caution-bg);
+  --ca-note-ink: var(--ca-caution-ink);
+  --ca-note-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2.2l6 11H2z'/%3E%3Cpath d='M8 6.4v3.2'/%3E%3Cpath d='M8 11.4v.1'/%3E%3C/svg%3E");
+  border-color: var(--ca-caution-line);
+}
+.ca-note--warning::before { background-color: var(--ca-caution-ink); }
+.ca-note--interpret {
+  --ca-note-line: var(--ca-primary);
+  --ca-note-bg: var(--ca-surface-2);
+  --ca-note-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.6 8S3.9 3.8 8 3.8 14.4 8 14.4 8 12.1 12.2 8 12.2 1.6 8 1.6 8z'/%3E%3Ccircle cx='8' cy='8' r='1.9'/%3E%3C/svg%3E");
+}
+.ca-note--interpret::before { background-color: var(--ca-primary); }
+/* The interpretation panel is long-form reading, so it gets body-size type. */
+.ca-note--interpret { font-size: var(--ca-t-body); }
+.ca-note--interpret .ca-note__title { font-size: var(--ca-t-h3); font-family: var(--ca-font-serif); }
+
+/* The numbered reading protocol. The numbering is real: it is the order you
+   look at the curve in. Hanging indent, not a grid — the items hold mixed
+   inline content and a grid would turn every inline run into its own row. */
+.ca-read {
+  list-style: none;
+  counter-reset: ca-read;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-4);
+}
+.ca-read__item,
+.ca-read > li {
+  counter-increment: ca-read;
+  position: relative;
+  padding-left: calc(24px + var(--ca-s-3));
+  min-height: 24px;
+  margin: 0;
+}
+.ca-read__item::before,
+.ca-read > li::before {
+  content: counter(ca-read);
+  position: absolute;
+  left: 0; top: 1px;
+  display: grid;
+  place-items: center;
+  width: 24px; height: 24px;
+  border-radius: var(--ca-r-1);
+  background: var(--ca-petrol-100);
+  color: var(--ca-primary);
+  font-family: var(--ca-font-mono);
+  font-size: var(--ca-t-micro);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ca-read b, .ca-read strong { color: var(--ca-ink); font-weight: 650; }
+.ca-read em { color: var(--ca-ink-3); font-style: italic; }
+.ca-read p + p { margin-top: var(--ca-s-2); }
+
+/* A legend key, so prose can name a mark on the plot without colouring the
+   text. Recolour or reshape it per instance with inline custom properties:
+     style = "--ca-key-colour: var(--ca-series-2)"                             */
+/* INTEGRATOR: this was `white-space: nowrap`, which is right for the one-word
+   swatch label on the Data tab but wrong for the two places that use .ca-key
+   on a whole paragraph (the J.1 conjunction line, the Conclusion tally). A
+   2179px unbreakable line inside a 728px column pushed document.scrollWidth to
+   2560 and made the whole app scroll sideways on the Qualitative tab. The key
+   now wraps; the swatch stays on the first line and never shrinks. */
+.ca-key {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: normal;
+  max-width: 100%;
+}
+.ca-key::before {
+  content: "";
+  position: relative;
+  top: -0.32em;
+  flex: 0 0 auto;
+  width: 16px; height: 2px;
+  border-radius: 1px;
+  background: var(--ca-key-colour, var(--ca-series-1));
+}
+
+/* The always-visible banner over an overridden or explored result (§F.19). */
+.ca-banner {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--ca-s-3);
+  padding: var(--ca-s-3) var(--ca-s-4);
+  border: 1px solid var(--ca-banner-line, var(--ca-rule));
+  border-left: 3px solid var(--ca-banner-line, var(--ca-rule));
+  border-radius: var(--ca-r-2);
+  background: var(--ca-banner-bg, var(--ca-surface-2));
+  color: var(--ca-banner-ink, var(--ca-ink-2));
+  font-size: var(--ca-t-small);
+  line-height: 1.5;
+  font-weight: 500;
+}
+.ca-banner > * { grid-column: 2; }
+.ca-banner::before {
+  content: "";
+  grid-column: 1;
+  width: 18px; height: 18px;
+  background-color: var(--ca-banner-ink, var(--ca-ink-3));
+  -webkit-mask: var(--ca-banner-glyph) center / contain no-repeat;
+  mask: var(--ca-banner-glyph) center / contain no-repeat;
+}
+.ca-banner--override {
+  --ca-banner-line: var(--ca-neutral-line);
+  --ca-banner-bg: var(--ca-neutral-bg);
+  --ca-banner-ink: var(--ca-neutral-ink);
+  --ca-banner-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M2.6 5.2h10.8'/%3E%3Ccircle cx='6' cy='5.2' r='1.9'/%3E%3Cpath d='M2.6 10.8h10.8'/%3E%3Ccircle cx='10.4' cy='10.8' r='1.9'/%3E%3C/svg%3E");
+}
+.ca-banner--warning {
+  --ca-banner-line: var(--ca-caution-solid);
+  --ca-banner-bg: var(--ca-caution-bg);
+  --ca-banner-ink: var(--ca-caution-ink);
+  --ca-banner-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2.2l6 11H2z'/%3E%3Cpath d='M8 6.4v3.2'/%3E%3Cpath d='M8 11.4v.1'/%3E%3C/svg%3E");
+}
+
+/* ===========================================================================
+   12. THE SENSITIVITY PANEL (category C, §H.4)
+   Dashed, unfilled, and deliberately unlike every result surface in the app:
+   nothing in here is a result. It never carries a chip and never uses .ca-rec.
+   =========================================================================== */
+.ca-sens {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ca-s-3);
+  padding: var(--ca-s-4) var(--ca-s-5);
+  border: 1px dashed var(--ca-rule-2);
+  border-radius: var(--ca-r-3);
+  background: transparent;
+  color: var(--ca-ink-2);
+  font-size: var(--ca-t-small);
+  line-height: 1.6;
+}
+.ca-sens__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--ca-s-2);
+  font-family: var(--ca-font-sans);
+  font-size: var(--ca-t-body);
+  font-weight: 650;
+  color: var(--ca-ink);
+  margin: 0;
+}
+.ca-sens__row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--ca-s-2);
+  padding: var(--ca-s-2) 0;
+  border-top: 1px solid var(--ca-rule);
+  font-variant-numeric: tabular-nums;
+}
+.ca-sens__row:first-of-type { border-top: 0; }
+.ca-sens__row b, .ca-sens__row strong { color: var(--ca-ink); }
+/* Off the package cutoffs: the whole panel changes tone so it can never be
+   screenshotted and mistaken for the result. */
+.ca-sens--changed {
+  border-color: var(--ca-caution-line);
+  border-style: dashed;
+  background: var(--ca-caution-bg);
+  color: var(--ca-caution-ink);
+}
+.ca-sens--changed .ca-sens__head,
+.ca-sens--changed .ca-sens__row b,
+.ca-sens--changed .ca-sens__row strong { color: var(--ca-caution-ink); }
+.ca-sens--changed .ca-sens__row { border-top-color: var(--ca-caution-line); }
+
+/* ===========================================================================
+   13. EMPTY STATES AND PLOTS
+   =========================================================================== */
+.ca-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ca-s-3);
+  padding: var(--ca-s-7) var(--ca-s-5);
+  border: 1px dashed var(--ca-rule-2);
+  border-radius: var(--ca-r-3);
+  background: var(--ca-surface);
+  color: var(--ca-ink-2);
+}
+.ca-empty__text {
+  font-size: var(--ca-t-lede);
+  line-height: 1.5;
+  color: var(--ca-ink-2);
+  max-width: 54ch;
+}
+.ca-empty__action { margin-top: var(--ca-s-1); }
+
+.ca-plot {
+  padding: var(--ca-s-3);
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-3);
+  overflow: hidden;
+  min-width: 0;
+}
+.ca-plot img,
+.ca-plot .shiny-plot-output img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--ca-r-2);
+}
+.ca-plot--sm { padding: var(--ca-s-2); }
+.ca-plot--sm img { max-height: 240px; width: auto; max-width: 100%; margin-inline: auto; }
+
+/* ===========================================================================
+   14. BOOTSTRAP AND SHINY CONTROLS
+   Everything below exists so a stock Shiny input does not arrive wearing its
+   own palette. No markup depends on it.
+   =========================================================================== */
+
+/* -- buttons ---------------------------------------------------------------- */
+.btn {
+  --bs-btn-border-radius: var(--ca-r-2);
+  font-weight: 600;
+  font-size: var(--ca-t-small);
+  letter-spacing: 0.01em;
+  padding: 0.5rem 0.95rem;
+  transition: background-color var(--ca-motion) var(--ca-ease),
+              border-color var(--ca-motion) var(--ca-ease),
+              color var(--ca-motion) var(--ca-ease);
+}
+.btn-default,
+.btn-secondary {
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule-2);
+  color: var(--ca-ink);
+}
+.btn-default:hover,
+.btn-secondary:hover {
+  background: var(--ca-surface-2);
+  border-color: var(--ca-ink-3);
+  color: var(--ca-ink);
+}
+.btn-primary {
+  background: var(--ca-primary);
+  border: 1px solid var(--ca-primary);
+  color: var(--ca-ink-invert);
+}
+.btn-primary:hover,
+.btn-primary:focus {
+  background: var(--ca-primary-hover);
+  border-color: var(--ca-primary-hover);
+  color: var(--ca-ink-invert);
+}
+.btn:disabled, .btn.disabled {
+  background: var(--ca-surface-3);
+  border-color: var(--ca-rule);
+  color: var(--ca-ink-3);
+  opacity: 1;
+}
+.btn-lg { font-size: var(--ca-t-body); padding: 0.65rem 1.2rem; }
+/* actionLink: a link that behaves like a control. The rail is built from
+   actionLinks too, so it is excluded here — it has its own treatment above. */
+a.action-button:not(.btn):not(.ca-rail__link) {
+  color: var(--ca-primary);
+  font-weight: 600;
+  font-size: var(--ca-t-small);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--ca-primary) 40%, transparent);
+  cursor: pointer;
+}
+a.action-button:not(.btn):not(.ca-rail__link):hover {
+  color: var(--ca-primary-hover);
+  border-bottom-color: currentColor;
+}
+
+/* -- form controls ---------------------------------------------------------- */
+.form-label,
+.control-label,
+.shiny-input-container > label {
+  font-size: var(--ca-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ca-ink-3);
+  margin-bottom: var(--ca-s-1);
+}
+.form-control,
+.form-select {
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule-2);
+  border-radius: var(--ca-r-2);
+  color: var(--ca-ink);
+  font-size: var(--ca-t-small);
+  padding: 0.42rem 0.6rem;
+}
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--ca-petrol-400);
+  box-shadow: var(--ca-focus);
+  background: var(--ca-surface);
+  color: var(--ca-ink);
+}
+.form-control::placeholder { color: var(--ca-ink-3); }
+textarea.form-control { line-height: 1.5; min-height: 5.5em; }
+.form-check-input {
+  border-color: var(--ca-rule-2);
+  background-color: var(--ca-surface);
+  width: 1.05em; height: 1.05em;
+  margin-top: 0.25em;
+}
+.form-check-input:checked {
+  background-color: var(--ca-primary);
+  border-color: var(--ca-primary);
+}
+.form-check-label { font-size: var(--ca-t-small); color: var(--ca-ink-2); }
+
+/* INTEGRATOR: Shiny's checkboxInput() puts the <input> INSIDE the <label>, so
+   a label longer than one line wrapped back under the box and lost its
+   indent. Laying the label out as a flex row hangs the text off the box. */
+.shiny-input-container .checkbox > label,
+.shiny-input-container .form-check > label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ca-s-2);
+  font-size: var(--ca-t-small);
+  line-height: 1.5;
+  color: var(--ca-ink-2);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.shiny-input-container .checkbox > label > input[type="checkbox"],
+.shiny-input-container .form-check > label > input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin: 0.2em 0 0;
+  position: static;
+}
+
+/* INTEGRATOR: `text-transform: uppercase` on a control label turns a Greek
+   alpha into a capital Alpha, which is indistinguishable from a Latin A, and
+   turns pi-hat into Pi. Any label carrying a mathematical symbol opts out of
+   the transform with this class and keeps the rest of the label styling. */
+.ca-nocaps { text-transform: none !important; letter-spacing: 0.02em; }
+.shiny-input-container { margin-bottom: var(--ca-s-4); }
+.shiny-input-container:last-child { margin-bottom: 0; }
+.help-block, .form-text { font-size: var(--ca-t-micro); color: var(--ca-ink-3); }
+
+/* selectize (selectInput) */
+.selectize-input {
+  background: var(--ca-surface) !important;
+  border: 1px solid var(--ca-rule-2) !important;
+  border-radius: var(--ca-r-2) !important;
+  color: var(--ca-ink);
+  font-size: var(--ca-t-small);
+  padding: 0.42rem 0.6rem !important;
+  box-shadow: none !important;
+}
+.selectize-input.focus { border-color: var(--ca-petrol-400) !important; box-shadow: var(--ca-focus) !important; }
+.selectize-dropdown {
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule-2);
+  border-radius: var(--ca-r-2);
+  color: var(--ca-ink-2);
+  font-size: var(--ca-t-small);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.selectize-dropdown .active { background: var(--ca-primary-soft); color: var(--ca-ink); }
+.selectize-dropdown .option { padding: 6px 10px; }
+.selectize-control.single .selectize-input::after { border-top-color: var(--ca-ink-3); }
+
+/* fileInput */
+.form-control[type="file"] { padding: 0.32rem 0.5rem; }
+.shiny-file-input-progress .progress-bar { background-color: var(--ca-primary); }
+.input-group-text { background: var(--ca-surface-2); border-color: var(--ca-rule-2); color: var(--ca-ink-2); }
+
+/* sliderInput (ionRangeSlider). Shiny's default is a saturated blue bar that
+   fights the petrol ramp; these five rules put it back in the palette. */
+.irs--shiny .irs-line { background: var(--ca-surface-3); border: 0; height: 6px; top: 27px; border-radius: 3px; }
+.irs--shiny .irs-bar {
+  background: var(--ca-primary);
+  border: 0; height: 6px; top: 27px;
+  border-radius: 3px;
+}
+.irs--shiny .irs-handle {
+  width: 18px; height: 18px; top: 21px;
+  background: var(--ca-surface);
+  border: 2px solid var(--ca-primary);
+  box-shadow: none;
+  cursor: grab;
+}
+.irs--shiny .irs-handle > i { display: none; }
+.irs--shiny .irs-from,
+.irs--shiny .irs-to,
+.irs--shiny .irs-single {
+  background: var(--ca-primary);
+  color: var(--ca-ink-invert);
+  font-family: var(--ca-font-mono);
+  font-size: var(--ca-t-micro);
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--ca-r-1);
+  padding: 1px 5px;
+}
+.irs--shiny .irs-from::before,
+.irs--shiny .irs-to::before,
+.irs--shiny .irs-single::before { border-top-color: var(--ca-primary); }
+.irs--shiny .irs-min,
+.irs--shiny .irs-max {
+  background: transparent;
+  color: var(--ca-ink-3);
+  font-family: var(--ca-font-mono);
+  font-size: var(--ca-t-micro);
+}
+.irs--shiny .irs-grid-text { color: var(--ca-ink-3); font-size: 9px; }
+.irs--shiny .irs-grid-pol { background: var(--ca-rule-2); }
+
+/* bslib accordion (Documentation tab) */
+.accordion {
+  --bs-accordion-bg: var(--ca-surface);
+  --bs-accordion-border-color: var(--ca-rule);
+  --bs-accordion-border-radius: var(--ca-r-3);
+  --bs-accordion-btn-color: var(--ca-ink);
+  --bs-accordion-btn-bg: var(--ca-surface);
+  --bs-accordion-active-color: var(--ca-ink);
+  --bs-accordion-active-bg: var(--ca-surface-2);
+  --bs-accordion-btn-focus-box-shadow: var(--ca-focus);
+  --bs-accordion-color: var(--ca-ink-2);
+}
+.accordion-button {
+  font-family: var(--ca-font-serif);
+  font-size: var(--ca-t-h3);
+  font-weight: 600;
+}
+.accordion-button:not(.collapsed) { box-shadow: inset 0 -1px 0 var(--ca-rule); }
+.accordion-body { font-size: var(--ca-t-small); line-height: 1.65; color: var(--ca-ink-2); }
+.accordion-body > * + * { margin-top: var(--ca-s-3); }
+
+/* tooltips and popovers (ca_tip) */
+.tooltip-inner {
+  background: var(--ca-ink);
+  color: var(--ca-surface);
+  font-size: var(--ca-t-small);
+  line-height: 1.45;
+  text-align: left;
+  max-width: 34ch;
+  padding: var(--ca-s-2) var(--ca-s-3);
+  border-radius: var(--ca-r-2);
+}
+.tooltip .tooltip-arrow::before { border-top-color: var(--ca-ink); border-bottom-color: var(--ca-ink); }
+.popover {
+  background: var(--ca-surface);
+  border-color: var(--ca-rule-2);
+  border-radius: var(--ca-r-2);
+  font-size: var(--ca-t-small);
+  color: var(--ca-ink-2);
+}
+.popover-header { background: var(--ca-surface-2); color: var(--ca-ink); border-bottom-color: var(--ca-rule); }
+
+/* verbatimTextOutput — the "Reproduce this in R" block, and raw messages. */
+pre,
+pre.shiny-text-output {
+  background: var(--ca-surface-3);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-2);
+  color: var(--ca-ink);
+  font-size: var(--ca-t-small);
+  line-height: 1.6;
+  padding: var(--ca-s-3);
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
+}
+
+/* withProgress / showNotification */
+.shiny-notification {
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule-2);
+  border-radius: var(--ca-r-2);
+  color: var(--ca-ink-2);
+  font-size: var(--ca-t-small);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+  opacity: 1;
+}
+.shiny-notification .progress-bar { background-color: var(--ca-primary); }
+.progress { background: var(--ca-surface-3); border-radius: 999px; height: 6px; }
+
+/* ===========================================================================
+   15. TABLES (DT 0.34 / DataTables 1.13.6, Bootstrap 5 style)
+   The goal is one table style, not DataTables' default chrome sitting inside
+   our cards. Striping, hover and borders are driven through Bootstrap's own
+   custom properties so light and dark both follow the tokens.
+   =========================================================================== */
+table.dataTable,
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--ca-ink-2);
+  --bs-table-striped-bg: var(--ca-surface-2);
+  --bs-table-striped-color: var(--ca-ink-2);
+  --bs-table-hover-bg: var(--ca-primary-soft);
+  --bs-table-hover-color: var(--ca-ink);
+  --bs-table-border-color: var(--ca-rule);
+  font-size: var(--ca-t-small);
+  color: var(--ca-ink-2);
+  border-color: var(--ca-rule);
+  margin: 0;
+}
+table.dataTable thead th,
+.table thead th {
+  font-size: var(--ca-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ca-ink-3);
+  background: var(--ca-surface-2);
+  border-bottom: 1px solid var(--ca-rule-2) !important;
+  padding: var(--ca-s-2) var(--ca-s-3);
+  white-space: nowrap;
+}
+table.dataTable tbody td,
+.table tbody td {
+  padding: var(--ca-s-2) var(--ca-s-3);
+  border-top: 1px solid var(--ca-rule);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+table.dataTable tbody tr:first-child td { border-top: 0; }
+table.dataTable.no-footer { border-bottom: 1px solid var(--ca-rule); }
+table.dataTable tbody tr.selected > * {
+  box-shadow: inset 0 0 0 9999px var(--ca-primary-soft);
+  color: var(--ca-ink);
+}
+.dataTables_empty { color: var(--ca-ink-3); padding: var(--ca-s-5) !important; }
+
+/* Sort indicators: keep the affordance, drop the heavy default glyphs. */
+table.dataTable thead th.sorting,
+table.dataTable thead th.sorting_asc,
+table.dataTable thead th.sorting_desc { cursor: pointer; }
+table.dataTable thead > tr > th.sorting::before,
+table.dataTable thead > tr > th.sorting::after,
+table.dataTable thead > tr > th.sorting_asc::before,
+table.dataTable thead > tr > th.sorting_asc::after,
+table.dataTable thead > tr > th.sorting_desc::before,
+table.dataTable thead > tr > th.sorting_desc::after {
+  opacity: 0.25;
+  color: var(--ca-ink-3);
+  font-size: 0.85em;
+}
+table.dataTable thead > tr > th.sorting_asc::before,
+table.dataTable thead > tr > th.sorting_desc::after {
+  opacity: 1;
+  color: var(--ca-primary);
+}
+
+/* The surrounding chrome: length menu, search box, info line, pagination. */
+.dataTables_wrapper { color: var(--ca-ink-2); font-size: var(--ca-t-small); padding-top: 2px; }
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate { font-size: var(--ca-t-micro); color: var(--ca-ink-3); }
+.dataTables_wrapper .dataTables_length label,
+.dataTables_wrapper .dataTables_filter label {
+  display: flex;
+  align-items: center;
+  gap: var(--ca-s-2);
+  font-size: var(--ca-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ca-ink-3);
+  margin: 0;
+}
+.dataTables_wrapper .dataTables_filter { text-align: right; }
+.dataTables_wrapper .dataTables_filter label { justify-content: flex-end; }
+.dataTables_wrapper .dataTables_length select,
+.dataTables_wrapper .dataTables_filter input {
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule-2);
+  border-radius: var(--ca-r-2);
+  color: var(--ca-ink);
+  font-size: var(--ca-t-small);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 0.28rem 0.5rem;
+  min-width: 4.5rem;
+}
+.dataTables_wrapper .dataTables_info { padding-top: var(--ca-s-3); }
+/* pagination, in both the Bootstrap 5 and the legacy DataTables skins */
+.dataTables_wrapper .pagination { --bs-pagination-border-radius: var(--ca-r-2); margin: var(--ca-s-2) 0 0; }
+.dataTables_wrapper .page-link {
+  background: transparent;
+  border-color: var(--ca-rule);
+  color: var(--ca-ink-2);
+  font-size: var(--ca-t-micro);
+  padding: 0.25rem 0.6rem;
+}
+.dataTables_wrapper .page-link:hover { background: var(--ca-surface-2); color: var(--ca-ink); }
+.dataTables_wrapper .page-item.active .page-link {
+  background: var(--ca-primary);
+  border-color: var(--ca-primary);
+  color: var(--ca-ink-invert);
+}
+.dataTables_wrapper .page-item.disabled .page-link { color: var(--ca-ink-3); background: transparent; border-color: var(--ca-rule); }
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  border-radius: var(--ca-r-2) !important;
+  border: 1px solid var(--ca-rule) !important;
+  background: transparent !important;
+  color: var(--ca-ink-2) !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: var(--ca-primary) !important;
+  border-color: var(--ca-primary) !important;
+  color: var(--ca-ink-invert) !important;
+}
+.dataTables_wrapper .dataTables_processing {
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-2);
+  color: var(--ca-ink-2);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+/* A wide table scrolls inside its own row; the page never scrolls sideways. */
+.dataTables_wrapper .row > div.col-sm-12:not([class*="col-md"]) { overflow-x: auto; }
+
+/* ===========================================================================
+   16. MOTION
+   What animates: colour/background on hover and focus, the disclosure caret,
+   and the opacity of a re-rendering output. What must never animate: a
+   statistic, a chip changing variant, the rail staircase, the three-step
+   strip, and any layout property (§L.14).
+   =========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===========================================================================
+   17. RESPONSIVE
+   >=992px : full rail (number + glyph + label + state)
+   <992px  : rail collapses to a 76px icon column; the label stays in the DOM
+             for screen readers, it is only visually hidden
+   <768px  : the rail becomes a horizontal bar that scrolls sideways
+   =========================================================================== */
+@media (max-width: 1199.98px) {
+  :root { --ca-rail-w: 232px; }
+  .ca-statrow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ca-statrow__cell:nth-child(4) { border-left: 0; }
+  .ca-statrow__cell:nth-child(n + 4) { border-top: 1px solid var(--ca-rule); }
+}
+@media (max-width: 991.98px) {
+  .ca-shell {
+    grid-template-columns: var(--ca-rail-w-icon) minmax(0, 1fr);
+    gap: var(--ca-s-4);
+  }
+  .ca-rail { padding: var(--ca-s-3) var(--ca-s-2); align-items: center; }
+  .ca-rail__eyebrow { display: none; }            /* compat class, see §18   */
+  .ca-rail__link {
+    grid-template-columns: 26px;
+    grid-template-areas: "num" "glyph" "state";
+    justify-items: center;
+    row-gap: 4px;
+    padding: var(--ca-s-2) var(--ca-s-1);
+  }
+  /* kept for assistive technology, not shown */
+  .ca-rail__label {
+    position: absolute;
+    width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .ca-rail__state { font-size: 0; gap: 0; }        /* the glyph still reads   */
+  .ca-rail__state svg { width: 14px; height: 14px; }
+  .ca-rail__link:not(:has(.ca-rail__state))::after {
+    position: static;
+    translate: none;
+    justify-self: center;
+  }
+  .ca-rail__item + .ca-rail__item .ca-rail__num::before { height: var(--ca-s-2); }
+  .ca-grid-2 { grid-template-columns: minmax(0, 1fr); }
+  .ca-hero { padding: var(--ca-s-5); }
+  .ca-hero > h1, .ca-hero > h2 { font-size: 2.2rem; }
+}
+@media (max-width: 767.98px) {
+  .ca-shell {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--ca-s-3);
+    gap: var(--ca-s-4);
+  }
+  .ca-rail {
+    position: static;
+    flex-direction: row;
+    padding: var(--ca-s-2);
+    border-radius: var(--ca-r-2);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .ca-rail > ul,
+  .ca-rail > ol,
+  .ca-rail ul.ca-rail__list,
+  .ca-rail ol.ca-rail__list {
+    flex-direction: row;
+    gap: var(--ca-s-1);
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding-bottom: 2px;
+  }
+  .ca-rail__item { flex: 0 0 auto; }
+  .ca-rail__link {
+    grid-template-columns: 26px auto auto;
+    grid-template-areas: "num glyph state";
+    align-items: center;
+    column-gap: 6px;
+    row-gap: 0;
+    padding: var(--ca-s-2) var(--ca-s-2) var(--ca-s-2) var(--ca-s-1);
+  }
+  /* the staircase turns horizontal */
+  .ca-rail__item + .ca-rail__item .ca-rail__num::before {
+    bottom: auto; top: 50%; left: auto; right: 100%;
+    translate: 0 -50%;
+    width: var(--ca-s-1); height: 2px;
+  }
+  .ca-steps { grid-template-columns: minmax(0, 1fr); padding: var(--ca-s-4); }
+  .ca-step { flex-direction: row; gap: var(--ca-s-3); align-items: stretch; }
+  .ca-step__rail { flex-direction: column; align-items: center; }
+  .ca-step:not(:last-child) .ca-step__rail::after {
+    flex: 1 1 auto;
+    width: 2px; height: auto;
+    min-height: var(--ca-s-5);
+    margin-left: 0;
+    margin-top: var(--ca-s-1);
+  }
+  .ca-step__body { padding-right: 0; padding-bottom: var(--ca-s-5); }
+  .ca-step:last-child .ca-step__body { padding-bottom: 0; }
+  .ca-statrow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ca-statrow__cell {
+    border-left: 0;
+    border-top: 1px solid var(--ca-rule);
+    padding: var(--ca-s-3);
+  }
+  .ca-statrow__cell:nth-child(odd) { border-right: 1px solid var(--ca-rule); }
+  .ca-statrow__cell:nth-child(-n + 2) { border-top: 0; }
+  .ca-statrow__value,
+  .ca-statrow__cell > dd { font-size: 1.4rem; }
+  .ca-card { padding: var(--ca-s-4); }
+  .ca-hero { padding: var(--ca-s-4); }
+  .ca-hero > h1, .ca-hero > h2 { font-size: 1.9rem; }
+  .ca-note { padding: var(--ca-s-3); }
+  .ca-sens { padding: var(--ca-s-3); }
+  .dataTables_wrapper .dataTables_filter { text-align: left; }
+  .dataTables_wrapper .dataTables_filter label { justify-content: flex-start; }
+  bslib-input-dark-mode { top: auto; bottom: var(--ca-s-3); right: var(--ca-s-3); }
+}
+
+/* Forced colours / Windows high contrast: fall back to system colours and keep
+   every glyph, because there the glyph is the only channel left. */
+@media (forced-colors: active) {
+  .ca-chip, .ca-card, .ca-rec, .ca-note, .ca-banner,
+  .ca-step__marker, .ca-empty, .ca-sens { border: 1px solid CanvasText; }
+  .ca-rail__link[aria-current="page"] { outline: 2px solid Highlight; }
+  .ca-rail__num { border: 1px solid CanvasText; }
+}
+
+/* ---------------------------------------------------------------------------
+   18. COMPATIBILITY BLOCK — NOT part of §G.
+   These class names come from the design memo (docs/design/app.css) and are
+   kept only so that markup written against it still renders coherently. New
+   code must use the §G names above; nothing here introduces a new treatment.
+   --------------------------------------------------------------------------- */
+.ca-eyebrow {
+  font-size: var(--ca-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ca-ink-3);
+  margin: 0;
+}
+.ca-rail__eyebrow { padding-inline: var(--ca-s-2); }
+.ca-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+         overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.ca-figure { font-variant-numeric: proportional-nums; }
+.ca-num { font-variant-numeric: tabular-nums; }
+.ca-scroll-x { overflow-x: auto; }
+.ca-chip--wrap { white-space: normal; }
+.ca-stat__unit { font-size: var(--ca-t-small); color: var(--ca-ink-3); }
+.ca-statrow__foot { font-size: var(--ca-t-micro); color: var(--ca-ink-3); line-height: 1.4; }
+.ca-statrow__unit { font-size: 0.55em; font-weight: 500; color: var(--ca-ink-3); margin-left: 2px; }
+.ca-step__note { font-size: var(--ca-t-small); color: var(--ca-ink-2); line-height: 1.5; }
+.ca-rec__body { display: flex; flex-direction: column; gap: var(--ca-s-2); min-width: 0; }
+.ca-rec__glyph { display: none; }
+.ca-rec__plain { font-size: var(--ca-t-lede); color: var(--ca-ink-2); line-height: 1.5; }
+.ca-rec__verbatim {
+  padding: var(--ca-s-3);
+  background: var(--ca-surface-3);
+  border-radius: var(--ca-r-2);
+  font-size: var(--ca-t-small);
+  line-height: 1.6;
+  color: var(--ca-ink-2);
+}
+.ca-rec__condition {
+  display: flex; align-items: center; gap: var(--ca-s-2);
+  font-size: var(--ca-t-small);
+  color: var(--ca-state-ink, var(--ca-ink-2));
+}
+.ca-rec__condition svg { display: block; width: 15px; height: 15px; flex: none; }
+.ca-key--band::before {
+  height: 11px; border-radius: 2px; background: var(--ca-band);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ca-series-1) 45%, transparent);
+}
+.ca-key--dashed::before {
+  background: repeating-linear-gradient(90deg,
+    var(--ca-key-colour, var(--ca-series-2)) 0 5px, transparent 5px 8px);
+}
+.ca-key--tail::before {
+  height: 12px; border-radius: 2px; background: var(--ca-tail-fill);
+  box-shadow: inset 0 0 0 1px var(--ca-tail-rule);
+}
+.ca-empty__title { font-family: var(--ca-font-serif); font-size: var(--ca-t-h3); color: var(--ca-ink); }
+.ca-cell-error { color: var(--ca-fail-ink); font-size: var(--ca-t-small); }
+.ca-cell-na { color: var(--ca-ink-3); }
+.ca-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ca-font-mono); font-size: var(--ca-t-micro);
+  padding: 2px 6px; border-radius: var(--ca-r-1);
+  border: 1px solid var(--ca-rule-2); color: var(--ca-ink-2);
+  background: var(--ca-surface-2);
+}
+.ca-badge--cure { border-color: var(--ca-neutral-line); background: var(--ca-neutral-bg); color: var(--ca-neutral-ink); }
+
+/* FIXPASS: the Data step's KM reading guide is collapsed and held to a
+   readable measure; the plot beside it now spans the full content width. */
+.ca-km-guide { margin-top: var(--ca-space-4, 1rem); }
+.ca-km-guide .accordion-body { max-width: 78ch; }
+.ca-km-guide .accordion-button { font-weight: 600; }
+
+/* FIXPASS: reset links guarded by an aria-disabled handler looked live.
+   Give anchors the same disabled treatment buttons already get. */
+a[aria-disabled="true"],
+.ca-card a.action-button[aria-disabled="true"] {
+  opacity: .45;
+  pointer-events: none;
+  cursor: default;
+  text-decoration: none;
+}
