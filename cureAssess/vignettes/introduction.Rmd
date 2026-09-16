@@ -1,0 +1,425 @@
+---
+title: "Introduction to cureAssess"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to cureAssess}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+```{r setup}
+library(cureAssess)
+library(survival)
+library(dplyr)
+```
+
+# Introduction
+
+The cureAssess package provides tools for assessing whether a cure model may be appropriate for right-censored survival data. The package supports a two-stage workflow:
+
+1. initial screening using Kaplan-Meier curves and AIC comparison of cure and non-cure models,
+2. optional deeper testing using cure-appropriateness diagnostics.
+
+In this vignette, we demonstrate the basic workflow using two datasets from the survival package.
+
+'nwtco' dataset was used to demonstrate an example when a cure model is appropriate and 'gbsg' dataset is used to demonstrate an example when a cure model is not appropriate.
+
+```{r}
+library(cureAssess)
+library(survival)
+library(dplyr)
+```
+
+# Example 1: `nwtco` data set — an example where a cure model may be appropriate
+
+We illustrate the use of `cureAssess` with the `nwtco` data set from the
+`survival` package.
+
+```{r}
+head(survival::nwtco)
+```
+The nwtco data set contains 4028 observations on 9 variables:
+
+seqno: subject identifier
+instit: histology from the local institution
+histol: histology from the central laboratory
+stage: disease stage
+study: study indicator
+rel: relapse indicator
+edrel: time to relapse
+age: age at diagnosis
+in.subcohort: indicator for inclusion in the subcohort used in the example paper
+
+For this illustration, the data were grouped into two clinically meaningful
+risk categories based on the variable stage:
+
+Low risk: stages 1 and 2, representing patients with relatively higher
+relapse-free survival
+High risk: stages 3 and 4, representing patients with relatively higher
+risk of relapse
+
+This type of grouping should ideally be guided by subject-matter expertise and
+clinical knowledge of the disease.
+
+In this example, age is assumed to be recorded in months, and edrel
+is assumed to be recorded in days. Therefore, the time variable is converted
+to years during data preparation.
+
+The grouping step is performed as part of data preprocessing before applying
+the functions in cureAssess.
+
+## Step 1: Data preprocessing and risk-group creation
+We first create the risk groups based on the disease stage.
+
+```{r}
+nwtco_dat <- survival::nwtco %>%
+  mutate(
+    stage_group = case_when(
+      stage %in% c(1, 2) ~ "Low risk",
+      stage %in% c(3, 4) ~ "High risk",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(stage_group))
+```
+
+## Step 2: Prepare the survival data
+Next, we standardize the survival data into the format required by cureAssess.
+Here the relapse time (edrel) is assumed to be recorded in days, so it is converted to years.
+
+```{r}
+nwtco_surv <- prepare.surv.data(
+  data = nwtco_dat,
+  time = "edrel",
+  status = "rel",
+  time_scale = "days_to_years"
+)
+head(nwtco_surv)
+```
+
+The prepared dataset contains the original columns plus:
+Y: survival time
+D: event indicator
+
+## Step 3: Fit candidate cure and non-cure models including KM curve
+
+Next, we fit several candidate models and compare them using AIC.
+
+```{r}
+fit_res <- model.fitting(nwtco_surv, plot_km = TRUE)
+fit_res
+```
+The AIC table can be examined directly.
+
+### Display the Kaplan-Meier curve
+
+If `plot_km = TRUE`, the Kaplan-Meier plot is stored in the fitted object.
+```{r}
+print(fit_res$kmplot)
+```
+
+```{r}
+fit_res$aic_table
+```
+
+The best-fitting model according to AIC is:
+
+```{r}
+fit_res$best_model
+fit_res$best_model_type
+```
+
+## Step 4: Run cure-appropriateness tests
+
+If desired, additional diagnostics can be computed.
+```{r}
+test_res <- run.cure.tests(nwtco_surv, dist = "lnorm")
+```
+### 1. Maller-Zhou test
+
+The Maller–Zhou test (Maller & Zhou, 1994; 1996) is a diagnostic method used to assess whether a cure fraction may exist in right-censored survival data.
+
+```{r}
+test_res$mz
+```
+
+### 2. qn statistic
+
+The qn statistic, proposed by Maller and Zhou (1996), is a descriptive statistic used to evaluate whether a survival plateau may exist in right-censored survival data.
+
+```{r}
+test_res$qn
+```
+
+### 3. Shen test
+
+The Shen test is a statistical method used to assess whether a cure fraction may be present in right-censored survival data.
+
+```{r}
+test_res$shen
+```
+
+### 4. Test for Immunes
+
+```{r}
+test_res$immune
+```
+
+### 5. RECeUS method
+
+The RECeUS method is a diagnostic approach used to assess whether a cure model is appropriate for survival data. It evaluates both the estimated cure fraction and the amount of remaining uncured subjects at the end of follow-up.
+
+```{r}
+test_res$receus
+```
+
+## Step 5: Run the full wrapper
+
+The main wrapper function combines preparation, model fitting, and optional testing.
+Screening only.
+
+```{r}
+res_screen <- cure.appropriateness(
+  data = nwtco_dat,
+  time = "edrel",
+  status = "rel",
+  time_scale = "days_to_years",
+  dist = "lnorm",
+  plot_km = FALSE,
+  run_tests = "no"
+)
+res_screen
+```
+The screening results can be inspected through the screening component.
+
+```{r}
+res_screen$screening$aic_table
+res_screen$screening$best_model
+res_screen$screening$initial_decision
+```
+
+Automatic testing only if the best model is a cure model.
+```{r}
+res_auto <- cure.appropriateness(
+  data = nwtco_dat,
+  time = "edrel",
+  status = "rel",
+  time_scale = "days_to_years",
+  dist = "lnorm",
+  plot_km = FALSE,
+  run_tests = "auto"
+)
+res_auto
+```
+
+Force all tests to run, regardless of which model AIC selected.
+
+```{r}
+res_full <- cure.appropriateness(
+  data = nwtco_dat,
+  time = "edrel",
+  status = "rel",
+  time_scale = "days_to_years",
+  dist = "lnorm",
+  plot_km = FALSE,
+  run_tests = "yes"
+)
+res_full
+```
+
+# Example 2: `gbsg` data set — an example where a cure model may not be appropriate.
+
+```{r}
+head(survival::gbsg)
+```
+The dataset contains 686 observations and the following variables:
+
+pid: patient identifier
+age: age in years
+meno: menopausal status (0 = premenopausal, 1 = postmenopausal)
+size: tumor size (mm)
+grade: tumor grade
+nodes: number of positive lymph nodes
+pgr: progesterone receptor level (fmol/l)
+er: estrogen receptor level (fmol/l)
+hormon: hormonal therapy (0 = no, 1 = yes)
+rfstime: recurrence-free survival time (days to first recurrence, death, or last follow-up)
+status: event indicator (0 = alive without recurrence, 1 = recurrence or death)
+
+## Step 1: Data preprocessing and risk-group creation
+We first create the groups based on the menopausal stage.
+```{r}
+gbsg_grouped <- survival::gbsg %>%
+  mutate(
+    meno_group = case_when(
+      meno == 0 ~ "Pre",
+      meno == 1 ~ "Post"
+    )
+  )
+
+table(gbsg_grouped$meno_group)
+```
+
+## Step 2: Prepare the survival data
+
+Then we need to convert input data into the format required by cureAssess. Here, recurrence-free survival time is stored in days, so we convert it to years.
+
+```{r}
+gbsg_dat <- prepare.surv.data(
+  data = survival::gbsg,
+  time = "rfstime",
+  status = "status",
+  time_scale = "days_to_years"
+)
+head(gbsg_dat)
+```
+
+The prepared dataset contains the original columns plus:
+Y: survival time
+D: event indicator
+
+## Step 3: Fit candidate cure and non-cure models including KM curve
+
+Next, we fit several candidate models and compare them using AIC.
+
+```{r}
+fit_res <- model.fitting(gbsg_dat, plot_km = TRUE)
+fit_res
+```
+The AIC table can be examined directly.
+
+### Display the Kaplan-Meier curve
+
+If `plot_km = TRUE`, the Kaplan-Meier plot is stored in the fitted object.
+```{r}
+print(fit_res$kmplot)
+```
+
+```{r}
+fit_res$aic_table
+```
+
+The best-fitting model according to AIC is:
+
+```{r}
+fit_res$best_model
+fit_res$best_model_type
+```
+
+## Step 4: Run cure-appropriateness tests
+If desired, additional diagnostics can be computed.
+```{r}
+test_res <- run.cure.tests(gbsg_dat, dist = "lnorm")
+```
+### 1. Maller-Zhou test
+
+The Maller–Zhou test (Maller & Zhou, 1994; 1996) is a diagnostic method used to assess whether a cure fraction may exist in right-censored survival data.
+
+```{r}
+test_res$mz
+```
+
+### 2. qn statistic
+
+The qn statistic, proposed by Maller and Zhou (1996), is a descriptive statistic used to evaluate whether a survival plateau may exist in right-censored survival data.
+
+```{r}
+test_res$qn
+```
+
+### 3. Shen test
+
+The Shen test is a statistical method used to assess whether a cure fraction may be present in right-censored survival data.
+
+```{r}
+test_res$shen
+```
+
+### 4. Test for Immunes
+
+```{r}
+test_res$immune
+```
+
+### 5. RECeUS method
+
+The RECeUS method is a diagnostic approach used to assess whether a cure model is appropriate for survival data. It evaluates both the estimated cure fraction and the amount of remaining uncured subjects at the end of follow-up.
+
+```{r}
+test_res$receus
+```
+
+## Step 5: Run the full wrapper
+
+The main wrapper function combines preparation, model fitting, and optional testing.
+Screening only.
+
+```{r}
+res_screen <- cure.appropriateness(
+  data = survival::gbsg,
+  time = "rfstime",
+  status = "status",
+  time_scale = "days_to_years",
+  dist = "lnorm",
+  plot_km = FALSE,
+  run_tests = "no"
+)
+res_screen
+```
+The screening results can be inspected through the screening component.
+
+```{r}
+res_screen$screening$aic_table
+res_screen$screening$best_model
+res_screen$screening$initial_decision
+```
+
+Automatic testing only if the best model is a cure model.
+```{r}
+res_auto <- cure.appropriateness(
+  data = survival::gbsg,
+  time = "rfstime",
+  status = "status",
+  time_scale = "days_to_years",
+  dist = "lnorm",
+  plot_km = FALSE,
+  run_tests = "auto"
+)
+res_auto
+```
+
+Force all tests to run
+
+```{r}
+res_full <- cure.appropriateness(
+  data = survival::gbsg,
+  time = "rfstime",
+  status = "status",
+  time_scale = "days_to_years",
+  dist = "lnorm",
+  plot_km = FALSE,
+  run_tests = "yes"
+)
+res_full
+```
+
+# Recommended workflow
+
+The recommended workflow is:
+
+1. prepare the survival data,
+2. compare cure and non-cure models using AIC,
+3. if the best model is non-cure, conclude that cure modeling is not initially supported,
+4. if the best model is cure, or if the analyst wants further confirmation, run the additional diagnostic tests.
+
+This two-stage strategy helps separate initial model-based screening from deeper cure-appropriateness assessment.
+
+

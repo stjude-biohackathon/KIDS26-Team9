@@ -1,0 +1,51 @@
+Package: cureAssess
+Type: Package
+Title: Assessing Cure Model Appropriateness for Survival Data
+Version: 0.1.0
+Authors@R: c(
+    person(
+      given = "Geethanjalee",
+      family = "Mudunkotuwa",
+      role = c("aut", "cre", "cph"),
+      email = "geethanjaleem@gmail.com"
+    ),
+    person(
+      given = "Durbadal",
+      family = "Ghosh",
+      role = "aut",
+      email = "reevu7@gmail.com"
+    ))
+Description: Assesses whether cure models are appropriate for right-censored
+    survival data, where a fraction of subjects may never experience the event
+    of interest. Implements a two-stage workflow combining Kaplan-Meier
+    visualization and comparison of parametric cure and non-cure models by the
+    Akaike information criterion with formal diagnostics for sufficient
+    follow-up and for the presence of a cured fraction. The diagnostics
+    include the statistics of Maller and Zhou (1992)
+    <doi:10.1093/biomet/79.4.731> and Maller and Zhou (1994)
+    <doi:10.1080/01621459.1994.10476889>, the test of Shen (2000)
+    <doi:10.1016/S0167-7152(00)00063-8>, and the ratio estimation of censored
+    uncured subjects ('RECeUS') method of Selukar and Othus (2023)
+    <doi:10.1002/sim.9610>.
+License: MIT + file LICENSE
+URL: https://github.com/GeethanjaleeM/cureAssess
+BugReports: https://github.com/GeethanjaleeM/cureAssess/issues
+Encoding: UTF-8
+Language: en-US
+Depends: R (>= 4.1.0)
+Imports:
+    survival,
+    flexsurv,
+    flexsurvcure,
+    survminer,
+    ggplot2,
+    dplyr,
+    stats
+Roxygen: list(markdown = TRUE)
+Suggests:
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.1.0
