@@ -29,6 +29,17 @@
 #     (§B.2, ignoreInit = FALSE), so every later tab already has an answer on
 #     it by the time the reader arrives. The only control on this tab is
 #     navigation, which R2 explicitly leaves alone.
+#
+# FINAL_CONTRACT (this pass, owner builder-intro):
+#   * I1 / §G.1 — the three definitions (cure model, cure fraction, sufficient
+#     follow-up) arrive as ONE paragraph of two sentences, pasted verbatim.
+#   * I2 / §G.8 — the equation figure carries `ca-figure--eq` and is capped
+#     much smaller by the shared stylesheet. This file writes no CSS.
+#   * I3 / §D — a drawn, inline-SVG cure-model schematic, themed entirely from
+#     `var(--ca-…)` tokens so it works in light and dark and at any width.
+#     It is a picture drawn from literals: no dataset, no package call, no
+#     number on screen, so S1 is not engaged (§D.2).
+#   * I4 / §D.7 — the flowchart now sits AFTER that diagram.
 # ---------------------------------------------------------------------------
 
 
@@ -38,21 +49,152 @@
 #'   because Shiny serves `app/www` as the web root (§H).
 #' @param alt long-form alternative text; the §H alt strings are pasted whole.
 #' @param cap caption text.
+#' @param extra_class optional extra class on the `<figure>`. Used once, for
+#'   the equation figure, which carries `ca-figure--eq` so the shared stylesheet
+#'   can cap its height much lower than the flowchart's (FINAL_CONTRACT I2 /
+#'   §G.8). This module writes no CSS.
 #' @return an `htmltools` `<figure class="ca-figure">`
 #' @noRd
-.intro_figure <- function(src, alt, cap) {
+.intro_figure <- function(src, alt, cap, extra_class = NULL) {
   htmltools::tags$figure(
-    class = "ca-figure",
+    class = paste(c("ca-figure", extra_class), collapse = " "),
     htmltools::tags$img(src = src, class = "ca-figure__img", alt = alt),
     htmltools::tags$figcaption(class = "ca-figure__cap", cap)
   )
 }
 
 
+#' The cure-model schematic (FINAL_CONTRACT I3, drawn exactly to §D)
+#'
+#' Inline SVG, not a PNG and not a ggplot: it inherits the page's CSS custom
+#' properties, so dark mode is automatic with no second asset; it scales to any
+#' width with no fixed pixel height; and it is offline by construction (C5).
+#'
+#' S1 IS NOT ENGAGED (§D.2). This is a schematic: every coordinate below is a
+#' constant chosen to look right. It is drawn from no dataset, reads no `state`
+#' field, calls no package function and reports no number. The only tick labels
+#' are the structural 0 and 1 on the survival axis, and the plateau is labelled
+#' with the symbol pi — never with a value.
+#'
+#' Every stroke and fill is a `var(--ca-…)` token with a neutral fallback, so
+#' there is no hard-coded colour and the drawing re-themes with the page (§D.3).
+#' The long labels live in the HTML key below the drawing, not inside the
+#' viewBox, where at ~343px wide they would be illegible (§D.4).
+#'
+#' The ids `ca-cd-t` / `ca-cd-d` are literal: the diagram appears once, on this
+#' tab only (§D.6).
+#'
+#' @return an `htmltools` `<figure class="ca-figure ca-cure-diagram">`
+#' @noRd
+.intro_cure_diagram <- function() {
+  el <- function(name, ...) htmltools::tag(name, list(...))
+
+  swatch <- function(kind, text) {
+    htmltools::tags$li(
+      htmltools::tags$span(
+        class = paste0("ca-cure-diagram__swatch ca-cure-diagram__swatch--", kind)
+      ),
+      text
+    )
+  }
+
+  htmltools::tags$figure(
+    class = "ca-figure ca-cure-diagram",
+
+    htmltools::tags$svg(
+      viewBox = "0 0 640 340",
+      preserveAspectRatio = "xMidYMid meet",
+      # No `height` attribute: "auto" is not a valid SVG length, and Chrome
+      # logs `<svg> attribute height: Expected length, "auto"` on every load.
+      # `.ca-cure-diagram svg { height: auto }` in app.css does the real work,
+      # and the viewBox + preserveAspectRatio keep the aspect ratio.
+      width = "100%",
+      xmlns = "http://www.w3.org/2000/svg",
+      role = "img",
+      `aria-labelledby` = "ca-cd-t ca-cd-d",
+
+      el("title", id = "ca-cd-t", "A mixture cure model"),
+      el("desc", id = "ca-cd-d",
+         paste("Survival starts at one and falls, then flattens onto a plateau.",
+               "The plateau height is the cure fraction. A dashed curve shows the",
+               "uncured group, whose survival keeps falling to zero.")),
+
+      # 1. Axes.
+      el("line", x1 = "64", y1 = "280", x2 = "600", y2 = "280",
+         stroke = "var(--ca-rule-2, #999)", `stroke-width` = "1"),
+      el("line", x1 = "64", y1 = "24", x2 = "64", y2 = "280",
+         stroke = "var(--ca-rule-2, #999)", `stroke-width` = "1"),
+
+      # 2. Tick labels and axis titles. 1 and 0 are structural, not data.
+      el("text", x = "54", y = "29", `text-anchor` = "end", `font-size` = "15",
+         fill = "var(--ca-ink-3, #667378)", "1"),
+      el("text", x = "54", y = "284", `text-anchor` = "end", `font-size` = "15",
+         fill = "var(--ca-ink-3, #667378)", "0"),
+      el("text", x = "22", y = "152", `text-anchor` = "middle", `font-size` = "16",
+         fill = "var(--ca-ink-2, #414D52)", transform = "rotate(-90 22 152)",
+         "Survival"),
+      el("text", x = "332", y = "318", `text-anchor` = "middle", `font-size` = "16",
+         fill = "var(--ca-ink-2, #414D52)", "Time"),
+
+      # 3. The uncured component: keeps falling, all the way to zero.
+      #    §D.3 writes this tail as `S 480 280, 600 280`. The S shorthand
+      #    reflects the previous control point, which puts the implied control
+      #    below the axis and makes the drawn curve dip under zero and come
+      #    back up — a survival curve that rises. The tail is written out as an
+      #    explicit C with the SAME on-curve anchors, so only the control point
+      #    the contract never named moves, and the curve stays monotone.
+      el("path", d = "M 64 24 C 150 120, 220 240, 320 272 C 420 279, 480 280, 600 280",
+         stroke = "var(--ca-ink-3, #667378)", `stroke-width` = "2",
+         `stroke-dasharray` = "7 5", fill = "none"),
+
+      # 4. The cure-fraction rule, and 5. the cured share as an area.
+      el("line", x1 = "64", y1 = "190", x2 = "600", y2 = "190",
+         stroke = "var(--ca-primary, #0A5670)", `stroke-width` = "1.5",
+         `stroke-dasharray` = "2 4"),
+      el("rect", x = "64", y = "190", width = "536", height = "90",
+         fill = "var(--ca-primary, #0A5670)", opacity = "0.10"),
+
+      # 6. Overall survival: the same shape, flattening onto the plateau.
+      #    Same correction as (3), same reason: the S shorthand made the curve
+      #    sag below the plateau it is supposed to settle onto. Anchors
+      #    unchanged.
+      el("path", d = "M 64 24 C 150 96, 220 172, 320 188 C 420 190, 480 190, 600 190",
+         stroke = "var(--ca-primary, #0A5670)", `stroke-width` = "3.5",
+         fill = "none", `stroke-linecap` = "round"),
+
+      # 7. The one symbol inside the drawing.
+      el("text", x = "74", y = "182", `font-size` = "18", `font-style` = "italic",
+         fill = "var(--ca-primary, #0A5670)", `dominant-baseline` = "auto",
+         "π"),
+
+      # 8. Two right-hand brackets: pi down to 0, and pi up to 1. No text
+      #    inside the SVG for these — the key below carries the words (§D.4).
+      el("path", d = "M 606 194 h 6 v 82 h -6",
+         stroke = "var(--ca-ink-3, #667378)", `stroke-width` = "1.5", fill = "none"),
+      el("path", d = "M 606 186 h 6 v -156 h -6",
+         stroke = "var(--ca-ink-3, #667378)", `stroke-width` = "1.5", fill = "none")
+    ),
+
+    htmltools::tags$ul(
+      class = "ca-cure-diagram__key",
+      swatch("solid",   "Overall survival: the whole group."),
+      swatch("dashed",  "The uncured (susceptible) group, whose survival keeps falling."),
+      swatch("plateau", "The plateau height is the cure fraction π.")
+    ),
+
+    htmltools::tags$figcaption(
+      class = "ca-figure__cap",
+      "A mixture cure model: a cured fraction plus a declining uncured group."
+    )
+  )
+}
+
+
 #' Intro tab UI
 #'
-#' Title, one lede line, the flowchart, the equation, one control. Nothing
-#' else on this tab (§G.1).
+#' In order (FINAL_CONTRACT §D.7): the title and its one-line lede, the two
+#' definition sentences, the small equation, the cure-model diagram, the
+#' flowchart, one control. Nothing else on this tab.
 #'
 #' @param id module id, equal to the nav id `"intro"`
 #' @noRd
@@ -65,14 +207,48 @@ mod_intro_ui <- function(id) {
     htmltools::tags$h1(class = "ca-section__title",
                        "Is a cure model right for your data?"),
 
+    # FINAL_CONTRACT I1 / §G.1, pasted verbatim: one paragraph, two sentences,
+    # carrying all three definitions — a cure model, the cure fraction and
+    # sufficient follow-up. Nothing more is added, here or below (C2).
+    #
+    # The earlier one-line lede ("A cure model assumes some patients never have
+    # the event...") is deleted rather than kept above this one: it defined the
+    # same two ideas in weaker words, so keeping both made the page open on two
+    # paragraphs of overlapping definition. That is the repetition C3 forbids,
+    # and the lead asked for the definitions to be ONE OR TWO SENTENCES (I1) —
+    # which is exactly what this paragraph is.
     htmltools::tags$p(
       class = "ca-lede",
-      paste("A cure model assumes some patients never have the event. It fits only when that group",
-            "really exists and follow-up is long enough to see it.")
+      paste("A cure model splits patients into a cured fraction, who never have the event, and an",
+            "uncured or susceptible group, whose survival keeps falling; the cure fraction is the",
+            "share who are cured. Follow-up is sufficient when it runs far enough past the last",
+            "event for that plateau to be visible.")
     ),
 
-    # The flowchart leads the tab: it replaces the deleted three-step strip and
-    # carries the three checks in the lead's own wording (§H.1).
+    # FINAL_CONTRACT §D.7 fixes the order of what follows: the small equation,
+    # then the drawn cure-model diagram, then the flowchart, then the control.
+    #
+    # The equation, with the poster's own line. The notation in the alt text is
+    # the poster's: S_a(t) = pi_a + (1 - pi_a) S_u,a(t), pi_a the cure fraction
+    # — never the README's (1 - p) form (§H.2). I2 / §G.8: `ca-figure--eq` is
+    # what makes it much smaller; the cap itself lives in the shared stylesheet.
+    .intro_figure(
+      src = "img/mixture-cure-model.png",
+      alt = paste("Mixture cure model: overall survival in group a equals the cure fraction pi_a plus",
+                  "one minus pi_a times the survival of the uncured in group a."),
+      cap = "Cure models estimate the cure fraction and the survival of the uncured separately.",
+      extra_class = "ca-figure--eq"
+    ),
+
+    # I3: the drawn schematic of the mixture, immediately after the equation it
+    # illustrates. §D.1 records why the poster's image11.png is the visual
+    # reference but is not reused: it is a raster with a baked white ground, it
+    # does not show the two components, and it repeats the sufficient-follow-up
+    # idea that the flowchart below already carries (C3).
+    .intro_cure_diagram(),
+
+    # I4: the flowchart now comes AFTER the diagram. It carries the three
+    # checks in the lead's own wording (§H.1).
     #
     # V2_CONTRACT §E.5 #3 (R1): the caption that sat under this figure is
     # DELETED, and this alt text is rewritten so that it no longer reads as
@@ -85,16 +261,6 @@ mod_intro_ui <- function(id) {
                   "survival curve plateau, with late events absent? Quantitative assessment: is there",
                   "strong quantitative evidence of sufficient follow-up and a cure fraction?"),
       cap = "Cure-model appropriateness"
-    ),
-
-    # The equation, with the poster's own line. The notation in the alt text is
-    # the poster's: S_a(t) = pi_a + (1 - pi_a) S_u,a(t), pi_a the cure fraction
-    # — never the README's (1 - p) form (§H.2).
-    .intro_figure(
-      src = "img/mixture-cure-model.png",
-      alt = paste("Mixture cure model: overall survival in group a equals the cure fraction pi_a plus",
-                  "one minus pi_a times the survival of the uncured in group a."),
-      cap = "Cure models estimate the cure fraction and the survival of the uncured separately."
     ),
 
     # The only interactive element on the tab, and it goes to Expert judgment:

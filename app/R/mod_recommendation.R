@@ -69,10 +69,19 @@
 #    tell anyone to go and run anything. The one remaining empty state is the
 #    genuine one: no dataset at all.
 #
-# 4. R7/§C.6 — THE BATCH PANEL LIVES HERE, in one accordion panel closed by
-#    default, below the single recommendation and its download. No eighth tab.
-#    The engine is builder-batch's `app/R/mod_batch.R`; this file only mounts
-#    `mod_batch_ui()` / `mod_batch_server()` and never re-implements any of it.
+# 4. Batch is tab 6 ("Quantitative — Assess Multiple Datasets"), not a panel on
+#    this tab. This file no longer mounts it in any way.
+# =============================================================================
+# FINAL_CONTRACT (this pass, owner builder-report) — THREE CHANGES
+#
+#   C.1  the batch accordion section and its mod_batch_server() call are gone;
+#        the tab is exactly two sections, the recommendation and the Report
+#        card, and nothing replaces the batch block (C.2 — no pointer, no link).
+#   F    the Report card offers BOTH an HTML report and a PDF report. The PDF is
+#        the same report.Rmd rendered to HTML and then printed by headless
+#        Chrome (§F.1): one template, identical content, no LaTeX.
+#   P2/P3 live in report/report.Rmd — the session-information section and the
+#        interpretation disclosures are gone from the report body.
 # =============================================================================
 
 
@@ -152,7 +161,11 @@
 }
 
 #' A filename that names the dataset it describes.
-.rec_report_filename <- function(label) {
+#'
+#' FINAL_CONTRACT §F.6: `ext` was added this pass so the PDF handler can reuse
+#' the slug and the date untouched. Both downloads therefore name the same
+#' assessment, differing only in the extension.
+.rec_report_filename <- function(label, ext = "html") {
   slug <- if (is.null(label) || !nzchar(as.character(label)[1])) {
     "assessment"
   } else {
@@ -161,7 +174,157 @@
     s <- gsub("^-|-$", "", s)
     if (nzchar(s)) s else "assessment"
   }
-  paste0("cureAssess-report-", slug, "-", Sys.Date(), ".html")
+  paste0("cureAssess-report-", slug, "-", Sys.Date(), ".", ext)
+}
+
+
+#' The parameter list handed to report.Rmd — built once, used by both downloads.
+#'
+#' FINAL_CONTRACT §F.6: one template, one parameter block. The HTML handler and
+#' the PDF handler call this, so the two files cannot describe different
+#' assessments.
+#'
+#' V2_CONTRACT §B.1 / §H.2.2 — THE DEFAULT ASSESSMENT, STRAIGHT. This
+#' deliberately reverses an earlier fix that spliced `state$alpha_tests`
+#' (Maller-Zhou and Shen recomputed at the user's alpha) into the object handed
+#' to the Rmd. §B.1 makes the alpha, tau and distribution controls display-only
+#' and says in terms that they "never reach report.Rmd"; §H.2.2 requires the
+#' download to use the default tau and the default distribution regardless of
+#' any exploration state. So the report is the assessment the recommendation
+#' above rests on, and nothing else. The exploration controls carry their own
+#' permanent caveat line on the Quantitative tab.
+#'
+#' `expert` is the three-way expert state, not a two-state boolean. The report
+#' reproduces all four recommendation rules, rule 1 included, so it can no
+#' longer print a verdict the screen does not show. One source:
+#' ca_expert_state() (helpers.R N.1).
+.rec_report_params <- function(state) {
+  list(
+    label             = state$label,
+    source            = state$source,
+    map               = state$map,
+    prepared          = state$prepared,
+    fit               = state$fit,
+    assess            = state$assess,
+    include_lognormal = isTRUE(state$include_lognormal),
+    expert            = ca_expert_state(state)
+  )
+}
+
+
+# ---- the PDF route: render the HTML, then print it (FINAL_CONTRACT §F) ------
+# One template. The PDF is the HTML report printed by a headless Chromium-family
+# browser, so the two downloads cannot drift in content or in appearance. No
+# LaTeX is involved: TinyTeX is present on the demo machine but latexmk is not
+# on the PATH, and report.Rmd is styled in inlined HTML and CSS with unicode
+# mathematics that a LaTeX template would have to reimplement (§F.1).
+
+#' Find a Chromium-family browser that can print to PDF. Returns NA_character_
+#' when there is none. Checks an explicit override first so a demo machine can
+#' be pointed at any binary without a code change.
+.rec_find_chrome <- function() {
+  cand <- c(
+    Sys.getenv("CUREASSESS_CHROME"),
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    unname(Sys.which(c("google-chrome", "chromium", "chromium-browser", "chrome")))
+  )
+  cand <- cand[nzchar(cand)]
+  hit <- cand[file.exists(cand)]
+  if (length(hit)) normalizePath(hit[[1]], winslash = "/", mustWork = FALSE) else NA_character_
+}
+
+#' Is this file a PDF that Chrome actually finished writing?
+#'
+#' §F.3: a zero-byte or non-PDF result is a failure whatever the exit status
+#' said, so the magic number is checked rather than trusted.
+.rec_pdf_ok <- function(path) {
+  isTRUE(file.exists(path)) &&
+    isTRUE(file.size(path) > 1000) &&
+    identical(readBin(path, "raw", 5L), charToRaw("%PDF-"))
+}
+
+#' Print a local HTML file to PDF with headless Chrome.
+#'
+#' `system2()` shell-quotes the command but not the arguments, so every path
+#' argument is quoted here. A fresh `--user-data-dir` means a Chrome the user
+#' already has open cannot make the headless run bail out. The 90-second
+#' timeout is the outer guard for a cold Chrome start;
+#' `--virtual-time-budget` caps the page's own wait at 10 s.
+#'
+#' Stops with a readable message on any failure; the caller turns that into the
+#' on-screen note and the fallback PDF.
+.rec_print_pdf <- function(html_in, pdf_out) {
+  chrome <- .rec_find_chrome()
+  if (is.na(chrome)) {
+    stop("No Chrome or Chromium browser was found on this machine, so the HTML ",
+         "report could not be printed to PDF. Set CUREASSESS_CHROME to the ",
+         "browser binary, or use the HTML report.")
+  }
+
+  udd <- tempfile("ca_chrome")
+  dir.create(udd, showWarnings = FALSE, recursive = TRUE)
+  on.exit(unlink(udd, recursive = TRUE, force = TRUE), add = TRUE)
+
+  run <- function(headless_flag) {
+    args <- c(
+      headless_flag, "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+      "--disable-extensions", "--virtual-time-budget=10000", "--no-pdf-header-footer",
+      paste0("--user-data-dir=", shQuote(udd)),
+      paste0("--print-to-pdf=", shQuote(pdf_out)),
+      shQuote(paste0("file://", utils::URLencode(html_in)))
+    )
+    suppressWarnings(
+      system2(chrome, args, stdout = TRUE, stderr = TRUE, timeout = 90)
+    )
+  }
+
+  out <- run("--headless=new")
+
+  # Older Chrome builds only accept the old spelling of the flag. Retry once,
+  # and only on that specific evidence (§F.3).
+  if (!.rec_pdf_ok(pdf_out)) {
+    st  <- attr(out, "status")
+    txt <- paste(as.character(out), collapse = "\n")
+    if (!is.null(st) && !identical(as.integer(st), 0L) &&
+        grepl("unknown|unrecogni[sz]ed|not recognized|invalid switch", txt,
+              ignore.case = TRUE)) {
+      out <- run("--headless")
+    }
+  }
+
+  if (!.rec_pdf_ok(pdf_out)) {
+    txt <- paste(utils::head(as.character(out), 20L), collapse = "\n")
+    stop("The browser did not produce a readable PDF.",
+         if (nzchar(txt)) paste0("\n", txt) else "")
+  }
+  invisible(pdf_out)
+}
+
+#' The PDF written when the print fails.
+#'
+#' §F.5: the browser will save whatever comes back as a `.pdf`, so the failure
+#' artefact has to be a valid PDF too. Base graphics needs no LaTeX and is
+#' always available.
+.rec_pdf_failure_file <- function(file, msg) {
+  grDevices::pdf(file, width = 8.27, height = 11.69, onefile = TRUE)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  graphics::par(mar = c(1, 1, 1, 1))
+  graphics::plot.new()
+  graphics::text(0, 0.95, "The PDF report could not be generated.",
+                 adj = c(0, 1), cex = 1.2, font = 2)
+  graphics::text(0, 0.86, "The recommendation in the app is unchanged, and the HTML",
+                 adj = c(0, 1), cex = 0.9)
+  graphics::text(0, 0.82, "report still downloads normally.", adj = c(0, 1), cex = 0.9)
+  # strwrap() returns a vector; each line needs its own y or they overprint.
+  lines_txt <- utils::head(strwrap(paste(as.character(msg), collapse = " "), width = 92), 30L)
+  if (length(lines_txt)) {
+    graphics::text(0, 0.72 - 0.022 * (seq_along(lines_txt) - 1L), lines_txt,
+                   adj = c(0, 1), cex = 0.75)
+  }
+  invisible(NULL)
 }
 
 #' The file written when the render fails.
@@ -196,8 +359,11 @@
 # UI
 # =============================================================================
 
-#' Recommendation tab UI: one recommendation, the report control, and — closed —
-#' the same question asked of many datasets at once.
+#' Recommendation tab UI: one recommendation and the report controls.
+#'
+#' FINAL_CONTRACT §C.2 — exactly two sections. The batch panel that used to sit
+#' here in a closed accordion is now tab 6 in the rail, and nothing replaces it:
+#' no pointer, no link, no note (C4).
 mod_recommendation_ui <- function(id) {
   ns <- NS(id)
 
@@ -219,27 +385,6 @@ mod_recommendation_ui <- function(id) {
           uiOutput(ns("download_msg"))
         )
       )
-    ),
-
-    # V2_CONTRACT §C.6: the batch panel is one accordion panel on THIS tab,
-    # closed by default — "this tab is one recommendation and a download; batch
-    # is many recommendations and a download". There is no eighth tab; the
-    # seven-tab structure is the one the lead approved (§H.2.10).
-    #
-    # `open = FALSE` keeps it shut on arrival, so the tab still reads as one
-    # verdict. Everything inside belongs to builder-batch's app/R/mod_batch.R:
-    # this file supplies the panel and the module id, and nothing else.
-    htmltools::tags$section(
-      class = "ca-section",
-      bslib::accordion(
-        id = ns("batch_accordion"),
-        open = FALSE,
-        bslib::accordion_panel(
-          title = "Assess several datasets at once",
-          value = "batch",
-          mod_batch_ui(ns("batch"))
-        )
-      )
     )
   )
 }
@@ -252,10 +397,6 @@ mod_recommendation_ui <- function(id) {
 #' Recommendation tab server. Writes nothing to `state`.
 mod_recommendation_server <- function(id, state, go_to) {
   moduleServer(id, function(input, output, session) {
-
-    # The batch panel (§C.6). builder-batch owns everything it renders; this
-    # line is the whole of this file's involvement.
-    mod_batch_server("batch", state, go_to = go_to)
 
     # The only two controls on this tab: the empty-state exit to Data, and the
     # Rule 4 button to Expert judgment. No footer navigation.
@@ -326,36 +467,77 @@ mod_recommendation_server <- function(id, state, go_to) {
     # reactiveVal, so a failed download leaves the recommendation on screen
     # untouched.
 
+    # Two separate slots (§F.5 #1-#2): a failed PDF must never clear or mask the
+    # HTML message, and neither one is ever written to `state`.
     report_error <- reactiveVal(NULL)
+    pdf_error    <- reactiveVal(NULL)
 
     output$download_ui <- renderUI({
       ready <- identical(state$status, "assessed") && !is.null(state$assess)
-      btn <- downloadButton(
+
+      # Cheap: .rec_find_chrome() is a vector of file.exists() calls (§F.4).
+      have_chrome <- !is.na(.rec_find_chrome())
+
+      html_btn <- downloadButton(
         session$ns("download_report"), "Download HTML report",
         class = if (ready) "btn-primary" else "btn-secondary"
       )
-      if (ready) return(btn)
+      pdf_btn <- downloadButton(
+        session$ns("download_pdf"), "Download PDF report",
+        class = "btn-secondary"
+      )
+
       # Disabled, not hidden: the user should see what becomes available and
       # why. shiny::downloadButton() already emits class="disabled",
       # aria-disabled and tabindex="-1", and `.btn.disabled` in Bootstrap 5
       # blocks the click outright. Shiny's own JS strips all three the moment
       # the download output registers, so `data-shiny-disable-auto-enable` is
       # what actually keeps it disabled (shiny.min.js, download-link binding).
+      keep_disabled <- function(btn) {
+        htmltools::tagAppendAttributes(btn, `data-shiny-disable-auto-enable` = "true")
+      }
+
       htmltools::tagList(
-        htmltools::tagAppendAttributes(btn, `data-shiny-disable-auto-enable` = "true"),
-        htmltools::tags$p(class = "ca-lede", "Available once an assessment has run.")
+        if (ready) html_btn else keep_disabled(html_btn),
+        if (ready && have_chrome) pdf_btn else keep_disabled(pdf_btn),
+        if (!ready) {
+          htmltools::tags$p(class = "ca-lede", "Available once an assessment has run.")
+        },
+        if (!have_chrome) {
+          htmltools::tags$p(
+            class = "ca-lede",
+            paste("PDF export needs a Chrome or Chromium browser on this machine.",
+                  "The HTML report is unaffected.")
+          )
+        }
       )
     })
 
     output$download_msg <- renderUI({
-      msg <- report_error()
-      if (is.null(msg)) return(NULL)
-      ca_note(
-        "warning", "The report could not be generated",
-        htmltools::tagList(
-          htmltools::tags$p("The recommendation above is unchanged."),
-          ca_tech(htmltools::tags$p(msg))
-        )
+      html_msg <- report_error()
+      pdf_msg  <- pdf_error()
+      if (is.null(html_msg) && is.null(pdf_msg)) return(NULL)
+      htmltools::tagList(
+        if (!is.null(html_msg)) {
+          ca_note(
+            "warning", "The report could not be generated",
+            htmltools::tagList(
+              htmltools::tags$p("The recommendation above is unchanged."),
+              ca_tech(htmltools::tags$p(html_msg))
+            )
+          )
+        },
+        if (!is.null(pdf_msg)) {
+          ca_note(
+            "warning", "The PDF could not be generated",
+            htmltools::tagList(
+              htmltools::tags$p(
+                "The recommendation above is unchanged, and the HTML report still downloads."
+              ),
+              ca_tech(htmltools::tags$p(pdf_msg))
+            )
+          )
+        }
       )
     })
 
@@ -392,31 +574,7 @@ mod_recommendation_server <- function(id, state, go_to) {
               output_file       = file,
               intermediates_dir = td,
               knit_root_dir     = td,
-              params = list(
-                label             = state$label,
-                source            = state$source,
-                map               = state$map,
-                prepared          = state$prepared,
-                fit               = state$fit,
-                # V2_CONTRACT §B.1 / §H.2.2 — THE DEFAULT ASSESSMENT, STRAIGHT.
-                # This deliberately reverses an earlier fix that spliced
-                # `state$alpha_tests` (Maller-Zhou and Shen recomputed at the
-                # user's alpha) into the object handed to the Rmd. §B.1 makes
-                # the alpha, tau and distribution controls display-only and
-                # says in terms that they "never reach report.Rmd"; §H.2.2
-                # requires the download to use the default tau and the default
-                # distribution regardless of any exploration state. So the
-                # report is the assessment the recommendation above rests on,
-                # and nothing else. The exploration controls carry their own
-                # permanent caveat line on the Quantitative tab.
-                assess            = state$assess,
-                include_lognormal = isTRUE(state$include_lognormal),
-                # The three-way expert state, not a two-state boolean. The
-                # report reproduces all four recommendation rules, rule 1
-                # included, so it can no longer print a verdict the screen does
-                # not show. One source: ca_expert_state() (helpers.R N.1).
-                expert            = ca_expert_state(state)
-              ),
+              params            = .rec_report_params(state),
               envir = new.env(parent = globalenv()),
               quiet = TRUE
             )
@@ -436,6 +594,74 @@ mod_recommendation_server <- function(id, state, go_to) {
             con = file, useBytes = TRUE
           )
         }
+        invisible(NULL)
+      }
+    )
+
+    # ---- the downloadable PDF report --------------------------------------
+    # FINAL_CONTRACT §F. The SAME report.Rmd, the SAME parameters, rendered to
+    # HTML in a temporary directory and then printed by headless Chrome. There
+    # is no pdf_document output format and no second params block, so the two
+    # downloads are the same document.
+    #
+    # §F.5: the whole body is inside one tryCatch, the message goes to a local
+    # reactiveVal, and the file handed back is a valid PDF either way — the
+    # browser will save it as .pdf whatever happened. A failure here cannot
+    # touch the HTML download and cannot crash the app.
+
+    output$download_pdf <- downloadHandler(
+      filename = function() .rec_report_filename(state$label, ext = "pdf"),
+      content = function(file) {
+        pdf_error(NULL)
+
+        ok <- tryCatch({
+          rmd <- .rec_report_rmd()
+          if (is.na(rmd)) {
+            stop("report/report.Rmd could not be found from the working directory ",
+                 getwd(), ". Run the app from the repository root with ",
+                 "shiny::runApp(\"app\") so that report/ is a sibling of app/.")
+          }
+          if (!.rec_ensure_pandoc()) {
+            stop("pandoc was not found on this machine, and rmarkdown::render() ",
+                 "cannot produce the HTML that the PDF is printed from. Install ",
+                 "pandoc (or run the app from RStudio, which ships a copy) and ",
+                 "try again.")
+          }
+
+          td <- tempfile("ca_report_pdf")
+          dir.create(td)
+          local_rmd <- file.path(td, "report.Rmd")
+          if (!file.copy(rmd, local_rmd, overwrite = TRUE)) {
+            stop("The report template could not be copied to a temporary directory.")
+          }
+          html_out <- file.path(td, "report.html")
+
+          withProgress(message = "Building the report", value = 0.25, {
+            rmarkdown::render(
+              input             = local_rmd,
+              output_file       = html_out,
+              intermediates_dir = td,
+              knit_root_dir     = td,
+              params            = .rec_report_params(state),
+              envir = new.env(parent = globalenv()),
+              quiet = TRUE
+            )
+            setProgress(value = 0.7, message = "Printing the report")
+
+            # Chrome never writes into the download target directly (§F.3).
+            pdf_tmp <- tempfile(fileext = ".pdf")
+            .rec_print_pdf(html_out, pdf_tmp)
+            if (!file.copy(pdf_tmp, file, overwrite = TRUE)) {
+              stop("The finished PDF could not be copied to the download.")
+            }
+          })
+          TRUE
+        }, error = function(e) {
+          pdf_error(conditionMessage(e))
+          FALSE
+        })
+
+        if (!isTRUE(ok)) .rec_pdf_failure_file(file, pdf_error())
         invisible(NULL)
       }
     )

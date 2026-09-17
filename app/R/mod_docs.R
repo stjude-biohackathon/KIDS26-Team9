@@ -110,13 +110,13 @@
           <dd>
             Relative fit, penalised for the number of free parameters. For each candidate
             model <span class="ca-m"><i>m</i></span>,
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               AIC<sub>m</sub><span class="op">=</span>2<i>k</i><sub>m</sub><span class="op">&minus;</span>2&#8201;log&#8201;<span class="ca-hat it">L</span><sub>m</sub>
             </span>
             where <span class="ca-m"><span class="ca-hat it">L</span><sub>m</sub></span> is the
             maximised likelihood and <span class="ca-m"><i>k</i><sub>m</sub></span> the number of
             free parameters. For right-censored data the log-likelihood is
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               log&#8201;<i>L</i><span class="op">=</span>&#8721;<sub class="up">i&#8201;=&#8201;1</sub><sup>n</sup>
               <span class="br">&#123;</span><i>d</i><sub>i</sub>&#8201;log&#8201;<i>f</i><span class="br">(</span><i>y</i><sub>i</sub><span class="br">)</span>
               <span class="op">+</span>
@@ -130,7 +130,7 @@
             Each is fitted twice. Without a cured group the survival function is
             <span class="ca-m"><i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="opt">;</span>&#8201;<i>&theta;</i><span class="br">)</span></span>.
             With a cured group it is the mixture
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>&pi;</i><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><i>&pi;</i><span class="br">)</span>&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="opt">;</span>&#8201;<i>&theta;</i><span class="br">)</span><span class="opt">,</span>&emsp;<i>&pi;</i><span class="op">&#8712;</span><span class="br">[</span>0<span class="opt">,</span>&#8201;1<span class="br">]</span>
             </span>
             which carries one extra free parameter. A fifth shape, the lognormal, can be
@@ -236,12 +236,12 @@
             observed time, event or censored. The plateau length is the gap
             <span class="ca-m"><i>Y</i><sub class="up">max</sub><span class="op">&minus;</span><i>Y</i><sup class="up">*</sup></span>,
             and the window is that same width laid back from the last event:
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <span class="br">(</span>&#8201;2<i>Y</i><sup class="up">*</sup><span class="op">&minus;</span><i>Y</i><sub class="up">max</sub><span class="opt">,</span>&emsp;<i>Y</i><sup class="up">*</sup>&#8201;<span class="br">]</span>
             </span>
             With <span class="ca-m"><i>N</i><sub>n</sub></span> the number of events in that
             window, the statistic is
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <i>&alpha;</i><sub>n</sub><span class="op">=</span>
               <span class="br">(</span>1<span class="op">&minus;</span><i>N</i><sub>n</sub><span class="opt">&#8201;/&#8201;</span><i>n</i><span class="br">)</span><sup>n</sup>
             </span>
@@ -354,7 +354,7 @@
             <span class="ca-m"><span class="br">(</span>&#8201;2<i>Y</i><sup class="up">*</sup><span class="op">&minus;</span><i>Y</i><sub class="up">max</sub><span class="opt">,</span>&#8201;<i>Y</i><sup class="up">*</sup>&#8201;<span class="br">]</span></span>,
             of width <span class="ca-m"><i>Y</i><sub class="up">max</sub><span class="op">&minus;</span><i>Y</i><sup class="up">*</sup></span>,
             and with <span class="ca-m"><i>N</i><sub>n</sub></span> the events it contains,
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <i>q</i><sub>n</sub><span class="op">=</span>
               <span class="ca-frac"><span><i>N</i><sub>n</sub></span><span><i>n</i></span></span>
             </span>
@@ -382,7 +382,7 @@
           <dt>Decision rule, and how the threshold moves with <span class="ca-m"><i>n</i></span></dt>
           <dd>
             Follow-up is declared sufficient when
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <i>q</i><sub>n</sub><span class="op">&gt;</span>1<span class="op">&minus;</span>0.05<sup class="up">1&#8201;/&#8201;<i>n</i></sup>
             </span>
             The threshold falls as the sample grows, because the same <em>share</em> of a
@@ -405,7 +405,7 @@
           <dd>
             The Maller&ndash;Zhou statistic and this one are algebraically the same
             quantity. Exactly, on every dataset,
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <i>&alpha;</i><sub>n</sub><span class="op">=</span>
               <span class="br">(</span>1<span class="op">&minus;</span><i>q</i><sub>n</sub><span class="br">)</span><sup>n</sup>
               <span class="op">&#8660;</span>
@@ -485,7 +485,7 @@
           <dt>Definition</dt>
           <dd>
             Set the weight and the estimated censoring endpoint
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <i>w</i><span class="op">=</span>
               <span class="ca-frac"><span><i>Y</i><sub class="up">max</sub><span class="op">&minus;</span><i>Y</i><sup class="up">*</sup></span><span><i>Y</i><sub class="up">max</sub></span></span>
               <span class="opt">,</span>&emsp;
@@ -496,7 +496,7 @@
             up to <span class="ca-m"><i>Y</i><sup class="up">*</sup></span>, inclusive at both
             ends. With <span class="ca-m"><i>N</i><sub>n</sub><sup class="up">S</sup></span>
             the events it contains,
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <span class="ca-hat it">&alpha;</span><sub>n</sub><span class="op">=</span>
               <span class="br">(</span>1<span class="op">&minus;</span><i>N</i><sub>n</sub><sup class="up">S</sup><span class="opt">&#8201;/&#8201;</span><i>n</i><span class="br">)</span><sup>n</sup>
             </span>
@@ -610,7 +610,7 @@
             Under the mixture
             <span class="ca-m"><i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>&pi;</i><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><i>&pi;</i><span class="br">)</span>&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span></span>,
             evaluated at the analysis time <span class="ca-m"><i>&tau;</i></span>, the target is
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <i>r</i><span class="op">=</span>
               <span class="ca-frac">
                 <span><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span>
@@ -625,7 +625,7 @@
             The cure fraction and the shape parameters are estimated by maximum likelihood
             on the right-censored sample, using the smallest-AIC cure model from screening,
             and the estimate is the same expression at the fitted values:
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <span class="ca-hat it">r</span><span class="op">=</span>
               <span class="ca-frac">
                 <span><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="opt">;</span>&#8201;<span class="ca-hat it">&theta;</span><span class="br">)</span></span>
@@ -666,7 +666,7 @@
           <dt>Decision rule</dt>
           <dd>
             A cure model is appropriate when
-            <span class="ca-eq">
+            <span class="ca-eq ca-math">
               <span class="ca-hat it">&pi;</span><span class="op">&gt;</span>0.025
               <span class="op">&nbsp;and&nbsp;</span>
               <span class="ca-hat it">r</span><span class="op">&lt;</span>0.05
@@ -749,7 +749,7 @@
           and then never has the event — or uncured, in which case the event time is drawn
           from a Weibull distribution with shape 2 and scale 1. The cohort survival
           function is therefore
-          <span class="ca-eq">
+          <span class="ca-eq ca-math">
             <i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>&pi;</i><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><i>&pi;</i><span class="br">)</span>&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span>
           </span>
         </dd>
@@ -782,7 +782,7 @@
           the accrual end being half the 75th percentile of the uncured distribution.
           Everyone is followed to the common analysis time
           <span class="ca-m"><i>&tau;</i></span>, so the recorded pair is
-          <span class="ca-eq">
+          <span class="ca-eq ca-math">
             <i>Y</i><span class="op">=</span>min<span class="br">(</span><i>T</i><span class="opt">,</span>&#8201;<i>&tau;</i><span class="op">&minus;</span><i>A</i><span class="br">)</span>
             <span class="opt">,</span>&emsp;
             <i>D</i><span class="op">=</span><span class="br">1</span><span class="br">&#123;</span><i>T</i><span class="op">&#8804;</span><i>&tau;</i><span class="op">&minus;</span><i>A</i><span class="br">&#125;</span>
@@ -983,9 +983,13 @@
 
 #' Every Documentation section, in reading order, with no page chrome.
 #'
-#' Order is fixed by §E.5.2: the method blocks, the simulated-data section and
-#' the glossary all sit above the QR block and the reference list, and nothing
-#' is rendered after the reference list.
+#' FINAL_CONTRACT D1 — the Glossary and the Data-and-ethics accordion is now
+#' FIRST, above "The three checks". Everything below it keeps the order §E.5.2
+#' fixed: the method blocks, then the simulated-data section, then the QR block,
+#' then the reference list LAST, with nothing rendered after it. This is a
+#' re-ordering of existing tagList elements and nothing else — the accordions'
+#' own contents, titles and `open = FALSE` state are unchanged, and the
+#' mathematics still sets in HTML and unicode with no network (C5).
 #'
 #' The depth sits behind closed disclosures: the three checks, the glossary and
 #' the data-and-ethics note are closed accordion panels, and every method's
@@ -996,6 +1000,27 @@
 ca_docs_sections <- function() {
 
   htmltools::tagList(
+
+    htmltools::div(
+      class = "ca-section",
+      bslib::accordion(
+        open = FALSE, multiple = TRUE,
+
+        bslib::accordion_panel(
+          title = "Glossary", value = "glossary",
+          # §E.4 — thirteen entries, in dependency order.
+          htmltools::HTML(.DOCS_GLOSSARY_HTML)
+        ),
+
+        bslib::accordion_panel(
+          title = "Data and ethics", value = "data_ethics",
+          htmltools::tags$div(
+            class = "ca-card__body",
+            lapply(.DOCS_DATA_ETHICS, htmltools::tags$p)
+          )
+        )
+      )
+    ),
 
     htmltools::div(
       class = "ca-section",
@@ -1018,27 +1043,6 @@ ca_docs_sections <- function() {
 
     # §E.3 — R5.
     htmltools::HTML(.DOCS_SIMULATION_HTML),
-
-    htmltools::div(
-      class = "ca-section",
-      bslib::accordion(
-        open = FALSE, multiple = TRUE,
-
-        bslib::accordion_panel(
-          title = "Glossary", value = "glossary",
-          # §E.4 — thirteen entries, in dependency order.
-          htmltools::HTML(.DOCS_GLOSSARY_HTML)
-        ),
-
-        bslib::accordion_panel(
-          title = "Data and ethics", value = "data_ethics",
-          htmltools::tags$div(
-            class = "ca-card__body",
-            lapply(.DOCS_DATA_ETHICS, htmltools::tags$p)
-          )
-        )
-      )
-    ),
 
     # The QR block, immediately above References. The target is CA_PACKAGE_URL
     # (helpers.R) and is hard-coded nowhere else; the label says "the package"

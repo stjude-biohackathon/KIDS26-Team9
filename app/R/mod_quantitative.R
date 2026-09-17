@@ -35,6 +35,32 @@
 # ca_tests_at_alpha()) and receus.method() (through ca_receus_at_tau()).
 # model.fitting() moved to mod_data.R (§B.1 reactive 3); this file reads
 # state$fit for the overlay and never fits anything itself.
+#
+# REVISION v4.0 (FINAL_CONTRACT §P, §G.4-G.6, §E.3, §E.5).
+#
+#   N1  The Maller-Zhou and qn cards each show a test statistic AND a p-value.
+#       Both numbers are package fields and the two cards read each other's:
+#       the statistic is $tests$qn$statistic (the proportion N_n/n) and the
+#       p-value is $tests$mz$statistic (alpha_n, already on the p-value scale
+#       and compared to alpha by the package itself). They are one test (S9),
+#       so one line above the grid says so. NOTHING IS COMPUTED: each number is
+#       read from its own field, and neither is ever re-derived from the other,
+#       even though the algebra relating them is exact.
+#       Shen returns only method/statistic/alpha/interpretation, so its card
+#       carries a p-value and says in one line that there is no statistic to
+#       show. Back-solving Shen's underlying proportion from its p-value is
+#       forbidden (§P.2.4).
+#   N2  Every technical-details disclosure in the diagnostics region is gone —
+#       the four cards, the "not run" branch and the screening block. The
+#       package interpretation strings are no longer rendered anywhere here.
+#   N3  The cutoff what-if is now the RECeUS threshold test: a heading and one
+#       line. The controls are unchanged and still write nothing.
+#   N4  The two verdict lines are larger (.ca-sens__verdict) and direct.
+#   E   Both plots size to their container; the AIC table scrolls inside
+#       .ca-tablewrap with scrollX; the page heading is the lead's full name.
+#
+# Batch has never lived in this file — it is mounted from mod_recommendation.R
+# and moves to its own tab this pass. Nothing here refers to it.
 # ---------------------------------------------------------------------------
 
 
@@ -224,9 +250,19 @@ ca_receus_at_tau <- function(prepared, dist, tau) {
 }
 
 #' One labelled statistic slot inside a diagnostic card.
-.quant_stat <- function(label, value_text, void = FALSE) {
+#'
+#' `modifier` is an extra class for the slot. The diagnostics section passes
+#' "ca-stat--pv" on the p-value rows (§A handshake 3; builder-shell owns the
+#' rule). An undefined class is inert, so the row degrades to a plain slot.
+.quant_stat <- function(label, value_text, void = FALSE, modifier = NULL) {
   htmltools::div(
-    class = if (isTRUE(void)) "ca-stat ca-stat--void" else "ca-stat",
+    class = paste(
+      c(
+        if (isTRUE(void)) "ca-stat ca-stat--void" else "ca-stat",
+        modifier
+      ),
+      collapse = " "
+    ),
     htmltools::span(class = "ca-stat__label", label),
     htmltools::span(class = "ca-stat__value", value_text)
   )
@@ -345,7 +381,11 @@ mod_quantitative_ui <- function(id) {
     # ---- 1. heading and the two states this tab can be in ------------------
     htmltools::tags$section(
       class = "ca-section",
-      htmltools::tags$h1(class = "ca-section__title", "Quantitative assessment"),
+      # FINAL_CONTRACT §B.2 / §G.7 — the rail carries the short label
+      # ("Quantitative — single"); the page heading carries the lead's full
+      # name, verbatim, em dash (U+2014) with spaces.
+      htmltools::tags$h1(class = "ca-section__title",
+                         "Quantitative — Assess Single Datasets"),
       # The poster's own flowchart wording for this step, verbatim.
       htmltools::p(
         class = "ca-lede",
@@ -360,8 +400,7 @@ mod_quantitative_ui <- function(id) {
       class = "ca-section",
       uiOutput(ns("screening_head")),
       uiOutput(ns("best_line")),
-      uiOutput(ns("aic_wrap")),
-      uiOutput(ns("screening_tech"))
+      uiOutput(ns("aic_wrap"))
     ),
 
     # ---- 3. the four diagnostic cards -------------------------------------
@@ -370,6 +409,8 @@ mod_quantitative_ui <- function(id) {
       uiOutput(ns("diag_head_title")),
       uiOutput(ns("diag_msg")),
       uiOutput(ns("diag_banner")),
+      # §P.2.5 — the shared-p-value line, rendered ONCE, here and nowhere else.
+      uiOutput(ns("diag_pair_note")),
       htmltools::div(
         class = "ca-grid-2",
         uiOutput(ns("card_mz")),
@@ -447,7 +488,13 @@ mod_quantitative_ui <- function(id) {
           width = "22rem"
         ),
         uiOutput(ns("overlay_msg")),
-        plotOutput(ns("overlay_plot"), height = "380px"),
+        # §E.3 — no fixed pixel height. height = "100%" inside a container that
+        # carries a CSS aspect-ratio, so Shiny re-renders the PNG at the
+        # container's real size on every resize.
+        htmltools::div(
+          class = "ca-plot ca-plot--fluid",
+          plotOutput(ns("overlay_plot"), height = "100%")
+        ),
 
         # -- the cutoff what-if --------------------------------------------
         # The two sliders are static, not re-emitted by renderUI, so dragging
@@ -458,17 +505,20 @@ mod_quantitative_ui <- function(id) {
           uiOutput(ns("sens_head")),
           htmltools::div(
             class = "ca-sens__row",
+            # §G.4 — the labels name the quantities in words; the π̂ / r̂ glyphs
+            # stay in the result lines below, where the RECeUS card has already
+            # defined them.
             sliderInput(
               ns("sens_pi_cut"),
-              htmltools::span(htmltools::span(class = "ca-nocaps", "π̂"), " cutoff (yours)"),
+              "Cure fraction threshold",
               min = 0, max = 0.5, value = .QUANT_PI_CUT, step = 0.005, width = "22rem"
             ),
             sliderInput(
               ns("sens_r_cut"),
-              htmltools::span(htmltools::span(class = "ca-nocaps", "r̂"), " cutoff (yours)"),
+              "Uncured ratio threshold",
               min = 0, max = 0.5, value = .QUANT_R_CUT, step = 0.005, width = "22rem"
             ),
-            actionLink(ns("sens_reset"), "Reset both cutoffs to 0.025 and 0.05")
+            actionLink(ns("sens_reset"), "Reset to 0.025 and 0.05")
           ),
           uiOutput(ns("sens_panel"))
         )
@@ -759,17 +809,9 @@ mod_quantitative_server <- function(id, state, go_to) {
 
     output$aic_wrap <- renderUI({
       if (is.null(state$assess)) return(NULL)
-      DTOutput(ns("aic_table"))
-    })
-
-    # The package's own screening decision string, verbatim, in this section's
-    # technical-detail disclosure and nowhere else.
-    output$screening_tech <- renderUI({
-      if (is.null(state$assess)) return(NULL)
-      ca_tech(htmltools::p(
-        class = "ca-tech__body",
-        state$assess$screening$initial_decision       # $screening$initial_decision
-      ))
+      # §E.5 — the wide table scrolls inside its own container, never by
+      # pushing the page. Belt and braces with DT's own scrollX below.
+      htmltools::div(class = "ca-tablewrap", DTOutput(ns("aic_table")))
     })
 
     output$aic_table <- renderDT({
@@ -812,7 +854,17 @@ mod_quantitative_server <- function(id, state, go_to) {
           # looking broken. No number is altered.
           function(x) {                                                 # $aic_table$parameter_estimates
             if (is.na(x)) return(ca_dash())
-            sub("^=", "", as.character(x))
+            s <- sub("^=", "", as.character(x))
+            # C1: "theta" is the PACKAGE's internal name for the cure fraction
+            # in this string — for the best-fit row its value is byte-identical
+            # to the pi-hat the RECeUS card shows — so it is a field name on
+            # screen, and the one package spelling that survived the C1 sweep
+            # of this tab. Relabel the KEY to the word the rest of the app uses
+            # for that quantity; "shape", "scale" and "rate" are ordinary
+            # distribution vocabulary, not package names, and are left alone.
+            # Key only, anchored at the start or after a separator, so no
+            # NUMBER and no other parameter is touched.
+            gsub("(^|; )theta=", "\\1cure fraction=", s)
           },
           character(1)
         ),
@@ -843,7 +895,11 @@ mod_quantitative_server <- function(id, state, go_to) {
           dom = "t",
           paging = FALSE,
           ordering = TRUE,
-          scrollX = FALSE,
+          # §E.5 — the Parameters and Problem columns carry long strings and
+          # are the one thing that pushed the page wide at 768px. The error
+          # column stays visible and failed rows stay unfiltered (S4):
+          # narrowing is never implemented by hiding a column.
+          scrollX = TRUE,
           autoWidth = FALSE,
           order = list(list(2L, "asc")),
           columnDefs = list(
@@ -862,16 +918,25 @@ mod_quantitative_server <- function(id, state, go_to) {
     output$diag_msg <- renderUI({
       if (is.null(state$prepared) || is.null(state$assess)) return(NULL)
       if (!isTRUE(state$assess$tests_run)) {                 # $tests_run
-        # The heading, plus the package's own reason string in the disclosure.
-        # No fabricated cards.
+        # The heading, plus the reason, as a plain paragraph. No fabricated
+        # cards. The technical-details disclosure is gone (N2).
         return(htmltools::tagList(
           htmltools::h4(class = "ca-section__title", "Diagnostics were not run"),
-          ca_tech(htmltools::p(
-            class = "ca-tech__body", state$assess$tests_reason   # $tests_reason
-          ))
+          htmltools::p(state$assess$tests_reason)               # $tests_reason
         ))
       }
       NULL
+    })
+
+    # §P.2.5 — Maller-Zhou and qn are algebraically the same test (S9), so the
+    # two cards visibly share a p-value. One line says so, once, above the card
+    # grid; it is not repeated on either card.
+    output$diag_pair_note <- renderUI({
+      if (is.null(tests_r())) return(NULL)
+      htmltools::p(paste0(
+        "Maller-Zhou and qn are two readings of one test, so they share a ",
+        "p-value and cannot disagree."
+      ))
     })
 
     # The one exploration banner. It sits above the cards because the cards are
@@ -894,15 +959,25 @@ mod_quantitative_server <- function(id, state, go_to) {
       tt <- tests_r()
       if (is.null(tt)) return(NULL)
       mz <- tt$mz
-      stat <- mz$statistic                        # $tests$mz$statistic
+      # §P.2.1 / §P.2.3. TWO FIELDS, BOTH READ, NEITHER COMPUTED.
+      #   p-value        <- $tests$mz$statistic  — already on the p-value scale
+      #                     (Maller & Zhou 1994 eq. 5, alpha_n, compared to alpha
+      #                     by the package itself)
+      #   test statistic <- $tests$qn$statistic  — the proportion N_n/n over the
+      #                     same late-time window; mz and qn are one test (S9)
+      # The cross-read is deliberate and legal: both are fields of exported
+      # package returns. Neither number may ever be re-derived from the other,
+      # exact though that algebra is (§P.2.3).
+      pval <- mz$statistic                        # $tests$mz$statistic
+      stat <- tt$qn$statistic                     # $tests$qn$statistic
       alpha <- mz$alpha                           # $tests$mz$alpha
-      void <- !is.finite(stat)
+      void <- !is.finite(pval)
 
       # Direction: SMALLER is better (S8) — below alpha supports sufficient
       # follow-up.
       chip <- if (void) {
         ca_chip("void", "Cannot be computed", glyph = "dash")
-      } else if (stat < alpha) {
+      } else if (pval < alpha) {
         ca_chip("pass", "Follow-up sufficient")
       } else {
         ca_chip("fail", "Not sufficient")
@@ -912,12 +987,13 @@ mod_quantitative_server <- function(id, state, go_to) {
         title = "Maller-Zhou test",
         chip = chip,
         body = htmltools::tagList(
-          .quant_stat("Statistic", ca_num(stat), void = void),
-          .quant_threshold(paste0("Sufficient if below ", ca_num(alpha, 3))),
-          if (void) htmltools::p(.QUANT_VOID_LINE),
-          # The package's own interpretation string ALONE, nothing added around
-          # it. $tests$mz$interpretation, or the alpha-recomputed one.
-          ca_tech(htmltools::p(class = "ca-tech__body", mz$interpretation))
+          # §P.2.6 — in the void branch no labelled row is rendered at all,
+          # rather than a labelled em dash.
+          if (!void) .quant_stat("p-value", ca_num(pval), modifier = "ca-stat--pv"),
+          if (!void) .quant_stat("Test statistic", ca_num(stat)),
+          .quant_threshold(paste0("Sufficient if the p-value is below ",
+                                  ca_num(alpha, 3))),
+          if (void) htmltools::p(.QUANT_VOID_LINE)
         )
       )
     })
@@ -927,7 +1003,11 @@ mod_quantitative_server <- function(id, state, go_to) {
       tt <- tests_r()
       if (is.null(tt) || is.null(state$prepared)) return(NULL)
       qn <- tt$qn
+      # §P.2.2 / §P.2.3 — the mirror of the Maller-Zhou card. The statistic is
+      # this test's own field; the p-value is $tests$mz$statistic, read, never
+      # derived. See the comment on card_mz.
       stat <- qn$statistic                        # $tests$qn$statistic
+      pval <- tt$mz$statistic                     # $tests$mz$statistic
       n <- nrow(state$prepared)
       # S1 — the single closed form the app is permitted to evaluate.
       # qn.test() returns no threshold field, so this value is app-computed.
@@ -949,12 +1029,12 @@ mod_quantitative_server <- function(id, state, go_to) {
         title = "qn statistic",
         chip = chip,
         body = htmltools::tagList(
-          .quant_stat("Statistic", ca_num(stat), void = void),
-          .quant_threshold(paste0("Sufficient if above ", ca_num(thr, 7))),
-          if (void) htmltools::p(.QUANT_VOID_LINE),
-          # $tests$qn$interpretation is always the package's fixed alpha = 0.05
-          # sentence, whatever the slider says.
-          ca_tech(htmltools::p(class = "ca-tech__body", qn$interpretation))
+          # S8 — larger is better here, so the statistic leads (§P.2.2).
+          if (!void) .quant_stat("Test statistic", ca_num(stat)),
+          if (!void) .quant_stat("p-value", ca_num(pval), modifier = "ca-stat--pv"),
+          .quant_threshold(paste0("Sufficient if the statistic is above ",
+                                  ca_num(thr, 7))),
+          if (void) htmltools::p(.QUANT_VOID_LINE)
         )
       )
     })
@@ -964,14 +1044,23 @@ mod_quantitative_server <- function(id, state, go_to) {
       tt <- tests_r()
       if (is.null(tt)) return(NULL)
       sh <- tt$shen
-      stat <- sh$statistic                        # $tests$shen$statistic
+      # §P.2.4 — shen.test() returns method, statistic, alpha, interpretation
+      # and NOTHING ELSE. Its $statistic is the same complement-raised-to-n
+      # form as Maller-Zhou's but over Shen's own window, and the package
+      # compares it directly to alpha, so it is already on the p-value scale.
+      # The underlying count and proportion are NOT returned. Recovering them
+      # by inverting that form is a closed form and is FORBIDDEN (S1 permits
+      # exactly one app-side closed form, the qn threshold). A number the
+      # package chose not to report is a number the app does not have, so this
+      # card shows no test statistic.
+      pval <- sh$statistic                        # $tests$shen$statistic
       alpha <- sh$alpha                           # $tests$shen$alpha
-      void <- !is.finite(stat)
+      void <- !is.finite(pval)
 
       # Direction: SMALLER is better (S8).
       chip <- if (void) {
         ca_chip("void", "Cannot be computed", glyph = "dash")
-      } else if (stat < alpha) {
+      } else if (pval < alpha) {
         ca_chip("pass", "Follow-up sufficient")
       } else {
         ca_chip("fail", "Not sufficient")
@@ -981,11 +1070,12 @@ mod_quantitative_server <- function(id, state, go_to) {
         title = "Shen test",
         chip = chip,
         body = htmltools::tagList(
-          .quant_stat("Statistic", ca_num(stat), void = void),
-          .quant_threshold(paste0("Sufficient if below ", ca_num(alpha, 3))),
+          if (!void) .quant_stat("p-value", ca_num(pval), modifier = "ca-stat--pv"),
+          .quant_threshold(paste0("Sufficient if the p-value is below ",
+                                  ca_num(alpha, 3))),
           if (void) htmltools::p(.QUANT_VOID_LINE),
-          # $tests$shen$interpretation, or the alpha-recomputed one.
-          ca_tech(htmltools::p(class = "ca-tech__body", sh$interpretation))
+          # Where the statistic slot would be. One short line, verbatim.
+          if (!void) htmltools::p("Only the p-value is reported for this test.")
         )
       )
     })
@@ -1015,8 +1105,7 @@ mod_quantitative_server <- function(id, state, go_to) {
           .quant_stat("π̂", if (void) ca_dash() else ca_num(pi_hat), void = void),
           .quant_stat("r̂", if (void) ca_dash() else ca_num(r_hat), void = void),
           .quant_threshold("Supported if π̂ above 0.025 and r̂ below 0.05"),
-          if (void) htmltools::p(.QUANT_VOID_RECEUS),
-          ca_tech(htmltools::p(class = "ca-tech__body", rc$interpretation))
+          if (void) htmltools::p(.QUANT_VOID_RECEUS)
         )
       )
     })
@@ -1230,7 +1319,12 @@ mod_quantitative_server <- function(id, state, go_to) {
     output$tau_plot_wrap <- renderUI({
       cur <- tau_curve_r()
       if (is.null(cur) || is.null(cur$data)) return(NULL)
-      plotOutput(session$ns("tau_plot"), height = "280px")
+      # §E.3 — container-sized, not a fixed pixel height. The two facets want a
+      # wide box, hence the second class.
+      htmltools::div(
+        class = "ca-plot ca-plot--fluid ca-plot--wide",
+        plotOutput(session$ns("tau_plot"), height = "100%")
+      )
     })
 
     # ---- THE CUTOFF WHAT-IF ----------------------------------------------
@@ -1261,18 +1355,16 @@ mod_quantitative_server <- function(id, state, go_to) {
         if (!ca_has_tests(state)) return(NULL)
         return(ca_empty(.QUANT_VOID_RECEUS))
       }
+      # §G.4 — a heading and one line. Nothing else.
       htmltools::div(
         class = if (isTRUE(sens_changed_r())) "ca-sens__head ca-sens--changed" else "ca-sens__head",
         htmltools::h4(
           class = "ca-section__title",
-          "Your own cutoffs — for discussion only"
+          "Test a different RECeUS threshold"
         ),
-        htmltools::p("The two cutoffs are fixed by the published method and cannot be changed."),
-        # $tests$receus$decision, verbatim.
-        htmltools::p(paste0("The decision above stands: “", rc$decision, "”.")),
         htmltools::p(paste0(
-          "Moving the sliders only shows how close this dataset sits to the ",
-          "published lines. Nothing else in the app uses them."
+          "The published thresholds are 0.025 for the cure fraction and 0.05 ",
+          "for the uncured ratio. Moving them changes nothing else in the app."
         ))
       )
     })
@@ -1284,21 +1376,38 @@ mod_quantitative_server <- function(id, state, go_to) {
       r_hat <- rc$r_hat                                # $tests$receus$r_hat
       pi_cut <- input$sens_pi_cut %||% .QUANT_PI_CUT
       r_cut <- input$sens_r_cut %||% .QUANT_R_CUT
-      would <- function(ok) if (isTRUE(ok)) "would pass" else "would not pass"
+
+      # §G.5 — a direct statement, not a hedge. "at this threshold" is
+      # load-bearing: it keeps a what-if a what-if.
+      verdict <- function(ok) {
+        if (isTRUE(ok)) {
+          "cure model is appropriate at this threshold"
+        } else {
+          "cure model is not appropriate at this threshold"
+        }
+      }
 
       htmltools::div(
         class = "ca-sens__row",
         # Exactly two rows and no third line. These are plain comparisons of
         # two package fields against two numbers the user typed; they are
         # never stored, never chipped, and never leave this panel.
-        htmltools::p(paste0(
-          "π̂ = ", ca_num(pi_hat), " greater than ", ca_num(pi_cut, 3),
-          " → ", would(pi_hat > pi_cut)
-        )),
-        htmltools::p(paste0(
-          "r̂ = ", ca_num(r_hat), " less than ", ca_num(r_cut, 3),
-          " → ", would(r_hat < r_cut)
-        ))
+        htmltools::p(
+          class = "ca-sens__verdict",
+          paste0(
+            "π̂ = ", ca_num(pi_hat),
+            if (pi_hat > pi_cut) " above " else " not above ", ca_num(pi_cut, 3),
+            " → ", verdict(pi_hat > pi_cut)
+          )
+        ),
+        htmltools::p(
+          class = "ca-sens__verdict",
+          paste0(
+            "r̂ = ", ca_num(r_hat),
+            if (r_hat < r_cut) " below " else " not below ", ca_num(r_cut, 3),
+            " → ", verdict(r_hat < r_cut)
+          )
+        )
       )
     })
 

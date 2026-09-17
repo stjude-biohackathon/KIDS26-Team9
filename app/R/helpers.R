@@ -409,8 +409,16 @@ ca_empty <- function(text, action_id = NULL, action_label = NULL) {
 #' @param states Named character vector of "locked"/"ready"/"done", or NULL for
 #'   all "ready".
 #' @param active The currently displayed tab id, or NULL.
+#' @param titles Named character vector of full page headings, indexed by tab
+#'   id, or NULL. FINAL_CONTRACT §B.3: between 768px and 992px the rail is a
+#'   76px icon column and `.ca-rail__label` is visually hidden, and below 768px
+#'   it is a horizontal bar carrying only number, glyph and state. A plain
+#'   `title` attribute on the link is then the only way to recover the tab's
+#'   full name on hover. It is an HTML attribute, not a tooltip component: no
+#'   JS, no Bootstrap popover, nothing to initialise. NULL keeps the markup
+#'   byte-for-byte as it was, so this argument is additive.
 #' @return `htmltools` `<nav class="ca-rail">`.
-ca_rail <- function(order, labels, states = NULL, active = NULL) {
+ca_rail <- function(order, labels, states = NULL, active = NULL, titles = NULL) {
   stopifnot(is.character(order), length(order) > 0L)
   if (is.null(states)) states <- stats::setNames(rep("ready", length(order)), order)
   words  <- c(locked = "Locked", ready = "Ready", done = "Done")
@@ -424,6 +432,11 @@ ca_rail <- function(order, labels, states = NULL, active = NULL) {
     }
     is_active <- !is.null(active) && identical(id, active)
     lab <- if (id %in% names(labels)) as.character(labels[[id]]) else id
+    ttl <- if (!is.null(titles) && id %in% names(titles)) {
+      as.character(titles[[id]])
+    } else {
+      NULL
+    }
 
     htmltools::tags$li(
       class = "ca-rail__item",
@@ -438,6 +451,7 @@ ca_rail <- function(order, labels, states = NULL, active = NULL) {
         ),
         class = "ca-rail__link",
         `data-ca-state` = st,
+        title = ttl,
         `aria-current` = if (is_active) "page" else NULL,
         `aria-disabled` = if (identical(st, "locked")) "true" else NULL
       )
@@ -860,9 +874,14 @@ ca_recommendation <- function(aic_type, receus_decision, expert = "unanswered") 
     return(list(
       headline = "Do not use a cure model.",
       variant  = "ca-rec--unsupported",
+      # FINAL_CONTRACT E2 / §G.2: ", whatever the numbers say" is struck. The
+      # same sentence is mirrored, character for character, by mod_expert.R's
+      # "no" outcome line and by rp_recommendation() in report/report.Rmd —
+      # three owners, one string. If one of them drifts the screen and the
+      # report disagree.
       reasons  = paste(
         "You answered no at the expert judgment step. A cure model is not",
-        "appropriate here, whatever the numbers say."
+        "appropriate here."
       ),
       provisional = FALSE
     ))

@@ -60,6 +60,22 @@ params:
 #     same value that reaches ca_recommendation() and the batch CSV. All four
 #     rules are reproduced here and the screen and the report cannot disagree.
 #
+# FINAL_CONTRACT, this pass (owner builder-report):
+#   * §P — the three follow-up cards now label BOTH a test statistic and a
+#     p-value, read from the fields §P.2 names and from nowhere else. mz and qn
+#     are algebraically one test (mz$statistic == (1 - qn$statistic)^n exactly),
+#     so they share a p-value; one line under ## Diagnostics says so, once.
+#     Shen reports no statistic and none is back-solved (§P.2.4).
+#   * P2 — the Session information section is DELETED.
+#   * P3 — rp_tech() and its five call sites are DELETED. The interpretation
+#     strings go with them: each card already states its interpretation in the
+#     report's own words, so the disclosure was duplication, and it was the last
+#     place package field and model names reached the page.
+#   * E2 / §G.2 — "whatever the numbers say" is struck from rule 1's reason.
+#   * §F — this ONE template is also the PDF. mod_recommendation.R renders it to
+#     HTML and prints that with headless Chrome, so there is no pdf_document
+#     output format here and no second params block. Do not add either.
+#
 # S10 — the immune summary is gone from the output. The one surviving read is
 # $tests$immune$last_observation_censored, in the three-checks chunk, with no
 # immune branding, no statistic printed and no test framing. $tests_reason
@@ -127,12 +143,11 @@ rp_chip <- function(variant, label) {
          glyph, '</span>', esc(label), '</span>')
 }
 
-# The technical-detail block holds the package's own interpretation string
-# alone, verbatim, with nothing added around it (§G.5.2).
-rp_tech <- function(body, title = "The package's own words") {
-  paste0('<details class="ca-tech"><summary>', esc(title),
-         '</summary><div class="ca-tech__body"><p>', esc(body), '</p></div></details>')
-}
+# FINAL_CONTRACT P3 / §H: rp_tech() and every call to it are DELETED. The
+# disclosures repeated an interpretation the card already states in its own
+# words, and they were the last place package field and model names reached the
+# page. The one string that survives is $tests_reason, printed as a plain <p> in
+# the diagnostics-were-not-run branch and nowhere else.
 
 rp_card <- function(title, body_html, chip = NULL, lede = NULL) {
   paste0(
@@ -183,6 +198,19 @@ rp_model_label <- function(key) {
   if (is.null(key) || length(key) != 1L || is.na(key)) return(NA_character_)
   k <- as.character(key)
   if (k %in% names(RP_MODEL_LABELS)) unname(RP_MODEL_LABELS[[k]]) else k
+}
+
+# The AIC table's parameter cell, relabelled for C1 exactly as
+# mod_quantitative.R relabels it, so screen and report read the same. "theta"
+# is the package's own name for the cure fraction (for the best-fit row its
+# value is byte-identical to the pi-hat the RECeUS card reports); "shape",
+# "scale" and "rate" are ordinary distribution vocabulary and are left alone.
+# The leading "=" strip is the upstream one-parameter-fit bug the screen also
+# works around. Display only: no number is altered.
+rp_param_estimates <- function(x) {
+  if (is.null(x) || length(x) != 1L || is.na(x)) return("\u2014")
+  s <- sub("^=", "", as.character(x))
+  gsub("(^|; )theta=", "\\1cure fraction=", s)
 }
 
 # ---- the six descriptive numbers (helpers.R F.1; permitted app-side) -------
@@ -263,19 +291,50 @@ FU <- rp_followup()
 RP_NOT_COMPUTABLE     <- "Cannot be computed: the longest observed time is an event."
 RP_NOT_COMPUTABLE_REC <- "Cannot be computed: the model behind this number did not converge."
 
-rp_followup_card <- function(title, obj, stat, thr_text, sufficient) {
-  if (is.na(stat)) {
-    body <- paste0(
-      rp_stat_line(rp_dash()),
-      '<p class="ca-void-line">', esc(RP_NOT_COMPUTABLE), '</p>',
-      rp_tech(obj$interpretation)
-    )
-    return(rp_card(title, body, chip = rp_chip("void", "Cannot be computed")))
+# FINAL_CONTRACT §P.2.8 — the card gained `pval`, defaulting to NA.
+#
+# The two labelled quantities and where each one comes from (§P.2, and these
+# are the ONLY reads):
+#
+#   Maller-Zhou  p-value        $tests$mz$statistic    already on the p-value scale
+#   Maller-Zhou  test statistic $tests$qn$statistic    a proportion
+#   qn           test statistic $tests$qn$statistic
+#   qn           p-value        $tests$mz$statistic
+#   Shen         p-value        $tests$shen$statistic
+#
+# The cross-read is deliberate and is the whole point: mz$statistic is exactly
+# (1 - qn$statistic)^n, Maller & Zhou (1994) eq. 5, so the two cards share one
+# p-value by construction. This file NEVER computes (1 - qn)^n or 1 - mz^(1/n);
+# it reads the field (§P.2.3). Shen's underlying proportion is not returned by
+# the package, so no statistic is shown for Shen and none is back-solved
+# (§P.2.4).
+#
+# `pval_first` follows S8: for Maller-Zhou and Shen smaller is better, so the
+# p-value leads; for qn larger is better, so the statistic leads.
+rp_followup_card <- function(title, stat, thr_text, sufficient,
+                             pval = NA_real_, pval_first = FALSE,
+                             show_stat = TRUE, note = NULL) {
+  # S6 / §P.2.6: when the largest observed time is an event all three
+  # diagnostics return NA together. No labelled rows are rendered at all —
+  # never an em dash with a label beside it — and the literal text "NA" never
+  # reaches the page.
+  if (is.na(stat) && is.na(pval)) {
+    return(rp_card(
+      title,
+      paste0('<p class="ca-void-line">', esc(RP_NOT_COMPUTABLE), '</p>'),
+      chip = rp_chip("void", "Cannot be computed")
+    ))
   }
+
+  stat_row <- if (isTRUE(show_stat) && !is.na(stat)) {
+    rp_stat_line(rp_num(stat), "test statistic")
+  } else ""
+  pval_row <- if (!is.na(pval)) rp_stat_line(rp_num(pval), "p-value") else ""
+
   body <- paste0(
-    rp_stat_line(rp_num(stat)),
+    if (isTRUE(pval_first)) paste0(pval_row, stat_row) else paste0(stat_row, pval_row),
     rp_threshold_line(thr_text),
-    rp_tech(obj$interpretation)
+    if (!is.null(note)) paste0('<p class="ca-lede">', esc(note), '</p>') else ""
   )
   rp_card(
     title, body,
@@ -320,8 +379,11 @@ rp_recommendation <- function(aic, dec, expert = "unanswered") {
     return(list(
       headline = "Do not use a cure model.",
       variant  = "ca-rec--unsupported",
+      # E2 / §G.2 — the same string as ca_recommendation() rule 1 in
+      # app/R/helpers.R and as the Expert judgment page's "no" outcome line.
+      # All three, or the screen and the report disagree.
       reasons  = paste("You answered no at the expert judgment step. A cure model is not",
-                       "appropriate here, whatever the numbers say."),
+                       "appropriate here."),
       provisional = FALSE
     ))
   }
@@ -615,10 +677,17 @@ if (!HAVE_AIC) {
                 '<th>Parameters</th><th>Problem</th></tr>')
   body <- vapply(seq_len(n_models), function(i) {
     paste0(
-      '<tr><td><span class="ca-mono">', esc(tb$model[i]), '</span></td>',
+      # C1 / screen-report agreement: the MODEL cell carries the display name,
+      # exactly as mod_quantitative.R renders it, not the package key
+      # ("log-logistic cure model", not "loglogistic_cure"). A relabelling
+      # only: no row is added, removed or reordered, and no number moves.
+      '<tr><td><span class="ca-mono">', esc(rp_model_label(tb$model[i])), '</span></td>',
       '<td><span class="ca-badge">', esc(tb$model_type[i]), '</span></td>',
       '<td class="num">', esc(rp_num(tb$AIC[i], 2)), '</td>',
-      '<td><span class="ca-mono">', esc(tb$parameter_estimates[i]), '</span></td>',
+      # Same C1 relabel of the "theta" KEY the screen applies: it is the
+      # package's internal name for the cure fraction. Key only, anchored, so
+      # no number and no other parameter name is touched.
+      '<td><span class="ca-mono">', esc(rp_param_estimates(tb$parameter_estimates[i])), '</span></td>',
       '<td class="err">', esc(tb$error[i]), '</td></tr>'
     )
   }, character(1))
@@ -640,8 +709,7 @@ if (!HAVE_AIC) {
                '<span class="ca-badge">',
                esc(if (length(btyp) == 1L && !is.na(btyp)) btyp else rp_dash()),
                '</span></p>')
-      },
-      rp_tech(P_ASSESS$screening$initial_decision)
+      }
     )
   ), "\n")
 }
@@ -653,25 +721,43 @@ if (!HAVE_AIC) {
 cat('<p class="ca-lede">Is there strong quantitative evidence of sufficient follow-up and a ',
     'cure fraction?</p>\n', sep = "")
 
+# §P.2.5 — one short line, once, because two cards now visibly carry the same
+# p-value. It is not repeated on either card.
+cat('<p class="ca-lede">Maller-Zhou and qn are two readings of one test, so they ',
+    'share a p-value and cannot disagree.</p>\n', sep = "")
+
 qn_thr <- rp_qn_threshold(N_PREP, ALPHA)
 
+MZ_P <- rp_stat(TESTS$mz$statistic)     # the shared p-value
+QN_S <- rp_stat(TESTS$qn$statistic)     # the shared test statistic
+
+# Maller-Zhou: SMALLER is better (S8), so the p-value leads.
 cat(rp_followup_card(
-  "Maller-Zhou test", TESTS$mz, FU[[1]]$stat,
-  paste0("Below ", rp_num(FU[[1]]$threshold, 3)),
-  FU[[1]]$sufficient
+  "Maller-Zhou test",
+  stat = QN_S, pval = MZ_P, pval_first = TRUE,
+  thr_text   = paste0("Sufficient if the p-value is below ", rp_num(FU[[1]]$threshold, 3)),
+  sufficient = FU[[1]]$sufficient
 ), "\n")
 
-# qn: LARGER is better, against the app-computed threshold 1 - alpha^(1/n).
+# qn: LARGER is better (S8), against the app-computed threshold 1 - alpha^(1/n),
+# so the statistic leads.
 cat(rp_followup_card(
-  "qn statistic", TESTS$qn, FU[[2]]$stat,
-  paste0("Above ", rp_num(qn_thr, 7)),
-  FU[[2]]$sufficient
+  "qn statistic",
+  stat = QN_S, pval = MZ_P, pval_first = FALSE,
+  thr_text   = paste0("Sufficient if the statistic is above ", rp_num(qn_thr, 7)),
+  sufficient = FU[[2]]$sufficient
 ), "\n")
 
+# Shen: the package returns method, statistic, alpha and interpretation, and
+# nothing else. The underlying count and proportion are NOT returned, so no
+# statistic is shown and none is recovered (§P.2.4).
 cat(rp_followup_card(
-  "Shen test", TESTS$shen, FU[[3]]$stat,
-  paste0("Below ", rp_num(FU[[3]]$threshold, 3)),
-  FU[[3]]$sufficient
+  "Shen test",
+  stat = NA_real_, show_stat = FALSE,
+  pval = rp_stat(TESTS$shen$statistic), pval_first = TRUE,
+  thr_text   = paste0("Sufficient if the p-value is below ", rp_num(FU[[3]]$threshold, 3)),
+  sufficient = FU[[3]]$sufficient,
+  note       = "Only the p-value is reported for this test."
 ), "\n")
 
 # RECeUS. reads $tests$receus$pi_hat, $r_hat, $tau, $decision, $interpretation
@@ -682,8 +768,7 @@ if (is.na(pi_hat) && is.na(r_hat)) {
     "RECeUS",
     paste0(
       rp_stat_line(rp_dash(), "cure fraction"), rp_stat_line(rp_dash(), "remaining-uncured ratio"),
-      '<p class="ca-void-line">', esc(RP_NOT_COMPUTABLE_REC), '</p>',
-      rp_tech(rc$interpretation)
+      '<p class="ca-void-line">', esc(RP_NOT_COMPUTABLE_REC), '</p>'
     ),
     chip = rp_chip("void", "Cannot be computed")
   ), "\n")
@@ -697,8 +782,7 @@ if (is.na(pi_hat) && is.na(r_hat)) {
       rp_stat_line(rp_num(pi_hat), "cure fraction"),
       rp_stat_line(rp_num(r_hat), "remaining-uncured ratio"),
       rp_threshold_line("Above 0.025 and below 0.05"),
-      '<p class="ca-lede">Evaluated at ', esc(rp_num(tau)), ', the largest observed time.</p>',
-      rp_tech(rc$interpretation)
+      '<p class="ca-lede">Evaluated at ', esc(rp_num(tau)), ', the largest observed time.</p>'
     ),
     chip = rp_chip(chip_variant, rc$decision)
   ), "\n")
@@ -707,8 +791,10 @@ if (is.na(pi_hat) && is.na(r_hat)) {
 
 ```{r diag-not-run, results='asis', eval=(HAVE_ASSESS && !HAVE_TESTS)}
 # reads $tests_reason
+# P3: the one surviving package string, printed plainly with no disclosure
+# around it.
 cat('<h3>Diagnostics were not run</h3>\n')
-cat(rp_tech(P_ASSESS$tests_reason), "\n")
+cat('<p>', esc(P_ASSESS$tests_reason), '</p>\n', sep = "")
 ```
 
 ```{r diag-none, results='asis', eval=!HAVE_ASSESS}
@@ -800,9 +886,3 @@ cat('<p class="ca-lede">No assessment was supplied, so there is no recommendatio
 Every statistic above is a field of a `cureAssess` object. `cureAssess` is MIT licensed;
 authors Geethanjalee Mudunkotuwa and Durbadal Ghosh. Cite the tutorial manuscript for the
 workflow this report follows.
-
-## Session information
-
-```{r session-info, comment=NA}
-sessionInfo()
-```

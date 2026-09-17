@@ -1,0 +1,12 @@
+name: cureassess
+title: cureassess
+username: durbadal
+account: durbadal
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17940991
+bundleId: 12568877
+url: https://durbadal.shinyapps.io/cureassess/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
