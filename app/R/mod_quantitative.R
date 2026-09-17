@@ -1075,7 +1075,7 @@ mod_quantitative_server <- function(id, state, go_to) {
                                   ca_num(alpha, 3))),
           if (void) htmltools::p(.QUANT_VOID_LINE),
           # Where the statistic slot would be. One short line, verbatim.
-          if (!void) htmltools::p("Only the p-value is reported for this test.")
+          if (!void) htmltools::p("")
         )
       )
     })

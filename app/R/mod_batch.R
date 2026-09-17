@@ -1213,11 +1213,11 @@ mod_batch_server <- function(id, state, go_to = NULL) {
       errs <- attr(r, "errors")
       htmltools::tagList(
         htmltools::p(class = "ca-provenance",
-                     "This table is for scanning; the file you download is the record."),
+                     ""),
         # S9: the file reports the two follow-up statistics on two scales, and
         # they are algebraically the same reading.
         htmltools::p(class = "ca-provenance",
-                     "The file reports the follow-up statistic on two scales. It is one reading, not two."),
+                     ""),
         downloadButton(session$ns("download"), "Download results"),
         if (length(errs)) {
           ca_tech(htmltools::tags$pre(paste(sprintf("%s: %s", names(errs), unname(errs)),

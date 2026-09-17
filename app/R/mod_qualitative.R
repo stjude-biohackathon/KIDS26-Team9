@@ -107,11 +107,10 @@
 # rewritten here. The wording is the standard vocabulary of the cure-model
 # literature — plateau, cure fraction, at risk, censoring.
 .QUAL_PLATEAU_BULLETS <- c(
-  "The curve stops stepping down and runs flat: that flat stretch is the plateau.",
-  "The plateau covers a real share of the follow-up, not just the final moment.",
-  "Few or no events fall inside it.",
-  "Enough people are still at risk there to support it — check the table under the plot.",
-  "Heavy censoring alone can flatten a curve, so a plateau on its own is not a cure fraction."
+  "The curve stops declining and plateaus.",
+  "No events fall inside plateaus.",
+  "Enough people are still at risk is an evidence for cure: check the table under the plot.",
+  "Heavy censoring alone can flatten a curve, so a plateau does not necessarily indicate presence of a cure fraction."
 )
 
 #' The per-dataset bullets, generated from the loaded data.
@@ -146,9 +145,9 @@
     }
     if (length(level) == 1L && is.finite(level)) {
       out <- c(out, paste0(
-        "The curve settles near ", ca_num(level, 2),
+        "The curve plateaus near ", ca_num(level, 2),
         " after ", ca_num(facts$last_event, 2),
-        " and stays there to ", ca_num(facts$max_time, 2), "."
+        " and remains there to ", ca_num(facts$max_time, 2), "."
       ))
     }
 

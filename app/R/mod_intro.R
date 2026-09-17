@@ -219,10 +219,9 @@ mod_intro_ui <- function(id) {
     # which is exactly what this paragraph is.
     htmltools::tags$p(
       class = "ca-lede",
-      paste("A cure model splits patients into a cured fraction, who never have the event, and an",
-            "uncured or susceptible group, whose survival keeps falling; the cure fraction is the",
-            "share who are cured. Follow-up is sufficient when it runs far enough past the last",
-            "event for that plateau to be visible.")
+      paste("A cure model splits population into a cured subpopulation, who never have the event, and an",
+            "uncured or susceptible subpopulation, who experience the event; the cure fraction is the",
+            "proportion who are cured. Cure models require sufficent follow to identify the cured fraction and uncured survival.")
     ),
 
     # FINAL_CONTRACT §D.7 fixes the order of what follows: the small equation,
