@@ -81,9 +81,12 @@
   facts <- ca_tail_facts(prepared)
   if (!is.null(facts) && isTRUE(is.finite(facts$last_event)) &&
       isTRUE(is.finite(facts$max_time)) && !isTRUE(facts$zero_width)) {
+    # label = NULL: ca_followup_tail() documents NULL as "no label" and returns
+    # the two band layers only, so the band is drawn and never named on the
+    # curve. No edit to theme.R is needed for this.
     tail_layers <- ca_followup_tail(
       facts$last_event, facts$max_time, dark,
-      min_time = 0, label = "follow-up tail"
+      min_time = 0, label = NULL
     )
     if (length(tail_layers)) {
       behind  <- tail_layers[seq_len(min(2L, length(tail_layers)))]
@@ -100,13 +103,15 @@
 
 # ---- the two bullet lists (REVISION_CONTRACT §G.4.1, §G.4.2) ----------------
 
-# The generic list: five lines, pasted from §G.4.1 and not rewritten here.
+# The generic list: five lines, pasted from FINAL_CONTRACT §G.3 (Q5) and not
+# rewritten here. The wording is the standard vocabulary of the cure-model
+# literature — plateau, cure fraction, at risk, censoring.
 .QUAL_PLATEAU_BULLETS <- c(
-  "The curve stops stepping down and runs flat.",
-  "The flat stretch covers a real share of the follow-up, not just the last moment.",
+  "The curve stops stepping down and runs flat: that flat stretch is the plateau.",
+  "The plateau covers a real share of the follow-up, not just the final moment.",
   "Few or no events fall inside it.",
-  "Plenty of people are still being followed there — check the table under the plot.",
-  "Heavy censoring alone can flatten a curve, so flatness on its own proves nothing."
+  "Enough people are still at risk there to support it — check the table under the plot.",
+  "Heavy censoring alone can flatten a curve, so a plateau on its own is not a cure fraction."
 )
 
 #' The per-dataset bullets, generated from the loaded data.
@@ -158,7 +163,7 @@
       ca_pct(facts$gap_pct / 100, 0),
       " of the follow-up comes after the last event, with ",
       format(facts$n_cens_after),
-      " people still being followed in it."
+      " people still at risk in it."
     ))
   }
 
@@ -171,7 +176,7 @@
   # Bullet 4. Emitted only when there is no follow-up tail at all, and then
   # bullets 1 and 2 are not emitted.
   if (no_tail) {
-    out <- c(out, "The longest follow-up time is an event, so there is no flat stretch to read.")
+    out <- c(out, "The longest observed time is an event, so there is no plateau to read.")
   }
 
   out
@@ -214,14 +219,22 @@ mod_qualitative_ui <- function(id) {
       ca_card(
         title = "Kaplan-Meier curve",
         lede = "The shaded band runs from the last event to the end of follow-up.",
+        # FINAL_CONTRACT §G.3 (Q2-Q4): "This dataset" comes first and the
+        # generic reading guide sits below it, collapsed inside ca_tech() — the
+        # existing <details> component, so no new disclosure idiom and no new
+        # CSS. The <summary> is the heading now and carries the question mark;
+        # the old <h4> is gone.
+        # FINAL_CONTRACT §E.3: height = "100%" inside .ca-plot--fluid, whose
+        # aspect-ratio gives the container its height, so the plot is
+        # re-rendered at the container's real size instead of 560 fixed pixels.
         body = htmltools::tagList(
-          htmltools::div(class = "ca-plot",
-                         plotOutput(ns("km_main"), height = "560px")),
+          htmltools::div(class = "ca-plot ca-plot--fluid",
+                         plotOutput(ns("km_main"), height = "100%")),
           uiOutput(ns("plateau_chip")),
-          htmltools::tags$h4("How to spot a plateau"),
-          .qual_bullet_list(.QUAL_PLATEAU_BULLETS),
           htmltools::tags$h4("This dataset"),
-          uiOutput(ns("dataset_bullets"))
+          uiOutput(ns("dataset_bullets")),
+          ca_tech(body  = .qual_bullet_list(.QUAL_PLATEAU_BULLETS),
+                  title = "How to spot a plateau?")
         )
       )
     ),
@@ -278,7 +291,7 @@ mod_qualitative_server <- function(id, state, go_to) {
       # A failed annotation must never cost the user the curve itself.
       suppressMessages(print(if (inherits(ann, "try-error")) sp else ann))
     }, res = 108, bg = "transparent",
-       alt = "Kaplan-Meier survival curve for the prepared dataset, with the follow-up tail after the last event shaded.")
+       alt = "Kaplan-Meier survival curve for the prepared dataset, with the period after the last event shaded.")
 
     # ---- the plateau chip (§G.4) -------------------------------------------
     # reads $tests$immune$last_observation_censored via ca_last_obs_censored();
@@ -295,9 +308,9 @@ mod_qualitative_server <- function(id, state, go_to) {
       # the doc comment on ca_last_obs_censored() in helpers.R still quotes
       # that retired label.
       label <- if (isTRUE(censored)) {
-        "The last observed time is censored, so a plateau is possible"
+        "The longest observed time is censored, so a plateau is possible"
       } else if (identical(censored, FALSE)) {
-        "The last observed time is an event, so there is no clear plateau"
+        "The longest observed time is an event, so there is no plateau"
       } else {
         return(NULL)
       }

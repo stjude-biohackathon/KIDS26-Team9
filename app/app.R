@@ -5,7 +5,7 @@
 # This file, and only this file, knows the tab order. It attaches the
 # libraries, creates the one shared reactive state object, defines the one
 # navigation callback, builds the left rail and the hidden navset, and calls
-# the seven module servers. It contains no statistics and no package call
+# the eight module servers. It contains no statistics and no package call
 # sites.
 #
 # Run it with:  shiny::runApp("app")   from the repository root
@@ -13,10 +13,18 @@
 # =============================================================================
 
 # ---- libraries: these five, in this order, and no others -------------------
-library(shiny)
-library(bslib)
-library(DT)
-library(ggplot2)
+# suppressPackageStartupMessages: bslib masks utils::page and DT masks two
+# shiny exports, and each prints an "Attaching package" block to the console on
+# every launch. The masking is expected and harmless (nothing here calls
+# utils::page, and DT's dataTableOutput/renderDataTable are the ones we want),
+# but the notices are the only noise a clean start-up produces, so they are
+# silenced rather than left for a reader to triage.
+suppressPackageStartupMessages({
+  library(shiny)
+  library(bslib)
+  library(DT)
+  library(ggplot2)
+})
 
 # cureAssess is attached here, ONCE, for the whole app. The installed package is
 # preferred; the vendored source at cureAssess/ is the fallback so a teammate
@@ -67,15 +75,46 @@ if (!exists("ca_bs_theme", mode = "function")) {
 # numbers come from seq_along(NAV_ORDER); nothing else in the repo depends on
 # position, because every other reference is by id.
 #
-# REVISION_CONTRACT §B.1: seven tabs, and they now run in the published order
-# of reasoning — expert judgment, then visual, then quantitative. The old
-# "conclusion" id is dead and is NOT in this vector, so go_to() rejects it: any
-# stale navigation to it stops() loudly on the first click, by design.
-NAV_ORDER <- c("intro", "expert", "data", "qual", "quant", "rec", "docs")
+# FINAL_CONTRACT §B.1 — EIGHT tabs. `qmulti` is the batch assessment, lifted
+# out of the Recommendation accordion into a tab of its own and seated
+# immediately below `quant`. The old "conclusion" id is dead and is NOT in this
+# vector, so go_to() rejects it: any stale navigation to it stops() loudly on
+# the first click, by design.
+NAV_ORDER <- c("intro", "expert", "data", "qual", "quant", "qmulti", "rec", "docs")
 
-CA_NAV_LABELS <- c(intro = "Intro", expert = "Expert judgment", data = "Data",
-                   qual = "Qualitative", quant = "Quantitative",
-                   rec = "Recommendation", docs = "Documentation")
+# The rail carries the lead's tab names verbatim (T1/T3): the rail IS the tab
+# list, so an abbreviation here would mean the app does not have the tabs that
+# were asked for. The two long names wrap to two lines in the widened label
+# column (see app.css §17 — the rail gains 44px at >=1200px and 28px in the
+# 992-1200px band); the rail's own `max-height` + `overflow-y: auto` already
+# absorb the extra height at short viewports, and below 992px the labels are
+# visually hidden in favour of the icon rail, so neither long name reaches the
+# <768px horizontal scroller.
+CA_NAV_LABELS <- c(
+  intro  = "Intro",
+  expert = "Expert judgment",
+  data   = "Data",
+  qual   = "Qualitative",
+  quant  = "Quantitative — Assess Single Datasets",
+  qmulti = "Quantitative — Assess Multiple Datasets",
+  rec    = "Recommendation",
+  docs   = "Documentation"
+)
+
+# FINAL_CONTRACT §B.3 — the full page heading rides on each rail link as a
+# plain `title` attribute, so the 76px icon rail (768–992px) and the <768px
+# horizontal bar stay hoverable once the label is visually hidden. A plain HTML
+# attribute, no JS. These strings must match the <h1> on each tab.
+CA_NAV_TITLES <- c(
+  intro  = "Is a cure model right for your data?",
+  expert = "Expert judgment",
+  data   = "Data",
+  qual   = "Visual assessment",
+  quant  = "Quantitative — Assess Single Datasets",
+  qmulti = "Quantitative — Assess Multiple Datasets",
+  rec    = "Recommendation",
+  docs   = "Documentation"
+)
 
 
 # =============================================================================
@@ -119,8 +158,13 @@ ui <- bslib::page_fluid(
       ),
 
       # Written out literally in NAV_ORDER order: splicing into navset_hidden()
-      # is the one place bslib 0.12.0 is fussy, and seven literal lines cannot
-      # break. If NAV_ORDER changes, reorder these seven lines to match.
+      # is the one place bslib 0.12.0 is fussy, and eight literal lines cannot
+      # break. If NAV_ORDER changes, reorder these eight lines to match.
+      #
+      # FINAL_CONTRACT §C.3: `qmulti` mounts mod_batch_page_ui(), which is a
+      # thin page wrapper owned by builder-batch. It passes the SAME module id
+      # straight through to mod_batch_ui(), so no extra namespace level is
+      # introduced and every existing batch input id is unchanged.
       bslib::navset_hidden(
         id = "ca_nav",
         bslib::nav_panel_hidden(value = "intro",  mod_intro_ui("intro")),
@@ -128,6 +172,7 @@ ui <- bslib::page_fluid(
         bslib::nav_panel_hidden(value = "data",   mod_data_ui("data")),
         bslib::nav_panel_hidden(value = "qual",   mod_qualitative_ui("qual")),
         bslib::nav_panel_hidden(value = "quant",  mod_quantitative_ui("quant")),
+        bslib::nav_panel_hidden(value = "qmulti", mod_batch_page_ui("qmulti")),
         bslib::nav_panel_hidden(value = "rec",    mod_recommendation_ui("rec")),
         bslib::nav_panel_hidden(value = "docs",   mod_docs_ui("docs"))
       )
@@ -178,7 +223,7 @@ server <- function(input, output, session) {
 
   # ---- the navigation callback --------------------------------------------
   # Defined once, closing over the root session, and passed unchanged to all
-  # seven modules. It switches the visible panel and updates state$nav, and does
+  # eight modules. It switches the visible panel and updates state$nav, and does
   # nothing else: navigating is not an analysis event, so it never touches
   # prepared, assess or status. Safe and idempotent from any state, including
   # the empty one. An illegal tab id stops loudly so a typo is caught the first
@@ -246,11 +291,18 @@ server <- function(input, output, session) {
       quant  = if (!usable) "locked"
                else if (identical(st, "assessed") && !is.null(state$assess)) "done"
                else "ready",
+      # FINAL_CONTRACT §B.4: the new batch tab takes the SAME rule as `rec` —
+      # locked only when there is no usable data, "ready" otherwise, and never
+      # "done". Batch has no single completion the rail could assert: it runs
+      # over a set of datasets the user chooses, and finishing one says nothing
+      # about the rest. Eight steps, one coherent vocabulary.
+      qmulti = if (!usable) "locked" else "ready",
       rec    = if (!usable) "locked" else "ready",
       docs   = "ready"
     )
 
-    ca_rail(NAV_ORDER, CA_NAV_LABELS, states = states, active = state$nav)
+    ca_rail(NAV_ORDER, CA_NAV_LABELS, states = states, active = state$nav,
+            titles = CA_NAV_TITLES)
   })
 
   # ---- the progress announcement -------------------------------------------
@@ -258,25 +310,23 @@ server <- function(input, output, session) {
   # the wording; the shell only mounts it.
   output$ca_status <- shiny::renderText(ca_status_line(state))
 
-  # ---- the seven module servers -------------------------------------------
+  # ---- the eight module servers -------------------------------------------
   # Module id equals nav id throughout, so input ids on the Data tab are
   # namespaced "data-..." and so on. The first-load preparation of the default
   # dataset belongs to mod_data's auto-prepare observer (V2_CONTRACT §B.2,
   # `ignoreInit = FALSE`); the shell does not reach into another module's inputs
   # to trigger it.
   #
-  # BATCH IS NOT AN EIGHTH TAB (V2_CONTRACT §C.6, §H.10). `mod_batch_ui()` and
-  # `mod_batch_server()` are mounted by mod_recommendation.R, inside the
-  # Recommendation tab, as one accordion panel closed by default. Seven tabs is
-  # the structure the lead approved, and the Recommendation tab already is "one
-  # recommendation, and the download" — batch is "many recommendations, and a
-  # download". So NAV_ORDER, CA_NAV_LABELS and the navset above are unchanged,
-  # and the rail gains no row.
+  # FINAL_CONTRACT §C: batch is tab 6, mounted here under the id "qmulti".
+  # It was an accordion panel inside the Recommendation tab; that mount and the
+  # accordion around it are gone. mod_batch_server() already accepts and
+  # ignores go_to, and it adds no navigation button of its own.
   mod_intro_server("intro", state, go_to)
   mod_expert_server("expert", state, go_to)
   mod_data_server("data", state, go_to)
   mod_qualitative_server("qual", state, go_to)
   mod_quantitative_server("quant", state, go_to)
+  mod_batch_server("qmulti", state, go_to)
   mod_recommendation_server("rec", state, go_to)
   mod_docs_server("docs", state, go_to)
 

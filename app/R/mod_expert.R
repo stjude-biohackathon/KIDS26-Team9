@@ -101,10 +101,11 @@ mod_expert_ui <- function(id) {
 
     htmltools::tags$h1(class = "ca-section__title", "Expert judgment"),
 
-    htmltools::tags$p(
-      class = "ca-lede",
-      "Only a person who knows the disease can answer these. The app never answers them for you."
-    ),
+    # FINAL_CONTRACT E1 / §G.2: the two-sentence opening lede that stood here,
+    # about who can answer these questions and about the app never answering
+    # them, is DELETED and nothing replaces it. The page opens on the <h1> and
+    # goes straight to the first question. Do not reintroduce it or a
+    # paraphrase of it.
 
     # The poster's verbatim wording. It may not be reworded (§G.2).
     .expert_question(ns("q1"), "Is a cure biologically plausible?"),
@@ -172,7 +173,12 @@ mod_expert_server <- function(id, state, go_to) {
         line <- "Cure is plausible here."
       } else if (identical(st, "no")) {
         chip <- ca_chip("fail", "Answered no")
-        line <- "A cure model is not appropriate for this population, whatever the numbers say."
+        # FINAL_CONTRACT E2 / §G.2: the trailing clause this line used to end
+        # on is struck, and the sentence now stops at "population." The same
+        # sentence lives in helpers.R ca_recommendation() rule 1 and in
+        # report/report.Rmd's rp_recommendation() mirror — all three must read
+        # the same or the screen and the report disagree.
+        line <- "A cure model is not appropriate for this population."
       } else {
         chip <- ca_chip("neutral", "Not answered")
         line <- "Answer both to continue."

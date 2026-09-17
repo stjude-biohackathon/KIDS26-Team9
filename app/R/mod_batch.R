@@ -8,9 +8,16 @@
 #
 # File order, fixed by §C.0: constants, .ca_batch_frame_one(), the three frame
 # (spec) builders, ca_batch_assess(), ca_batch_csv(), ca_batch_group_choices(),
-# then mod_batch_ui() / mod_batch_server(). NOTHING in this file runs at source
-# time — the CA_BATCH_* constants it references live in helpers.R (§C.1) and are
-# only ever touched when a function is called.
+# then mod_batch_page_ui() / mod_batch_ui() / mod_batch_server(). NOTHING in this
+# file runs at source time — the CA_BATCH_* constants it references live in
+# helpers.R (§C.1) and are only ever touched when a function is called.
+#
+# FINAL_CONTRACT §C: batch is TAB 6, "Quantitative — Assess Multiple Datasets",
+# mounted by app.R as nav id "qmulti" directly below the single-dataset
+# Quantitative tab. It is no longer an accordion panel on the Recommendation
+# tab. mod_batch_page_ui() (§C.3) supplies the page heading and lede and passes
+# the SAME module id straight through to mod_batch_ui(), so no extra namespace
+# level is introduced and every input id below is unchanged.
 #
 # The engine half (everything above mod_batch_ui) imports no Shiny, holds no
 # reactive, never touches `state` and never throws. app-v2 and app-v3 mount the
@@ -741,12 +748,34 @@ ca_batch_group_choices <- function(raw, map = NULL) {
 # 7. UI
 # ===========================================================================
 
+#' The Quantitative — Assess Multiple Datasets tab (FINAL_CONTRACT §C.3)
+#'
+#' The SAME module id is passed straight through to mod_batch_ui(), so no extra
+#' namespace level is introduced and every existing input id is unchanged. The
+#' page heading is the lead's full name, verbatim (§B.2, §G.7); the rail carries
+#' the short label, which is app.R's business, not this file's.
+#'
+#' @param id module id — app.R mounts this as "qmulti".
+mod_batch_page_ui <- function(id) {
+  htmltools::tagList(
+    htmltools::tags$section(
+      class = "ca-section",
+      htmltools::tags$h1(class = "ca-section__title",
+                         "Quantitative — Assess Multiple Datasets"),
+      htmltools::tags$p(class = "ca-lede",
+                        "The same assessment, run over several datasets at once.")
+    ),
+    mod_batch_ui(id)
+  )
+}
+
+
 #' Batch panel UI
 #'
-#' Returns plain content; the caller supplies the chrome. In the baseline the
-#' Recommendation tab wraps it in one accordion panel, closed by default (§C.6);
-#' the alternatives mount the two sections in their own frames, which is what
-#' `section` is for — `mod_batch_ui(id)` on its own is unchanged.
+#' Returns plain content; the caller supplies the chrome. mod_batch_page_ui()
+#' above is the one that gives it a page; the alternatives mount the two
+#' sections in their own frames, which is what `section` is for —
+#' `mod_batch_ui(id)` on its own is unchanged.
 #'
 #' @param id module id.
 #' @param section "both" (default), "chooser" or "results".
@@ -778,7 +807,10 @@ mod_batch_ui <- function(id, section = c("both", "chooser", "results")) {
   results <- htmltools::div(
     class = "ca-batch__results",
     uiOutput(ns("status")),
-    DT::DTOutput(ns("table")),
+    # §E.5: the wide table scrolls INSIDE its own container, never by pushing
+    # the page. Belt and braces with DT's own scrollX, which stays TRUE. The
+    # .ca-tablewrap rule is builder-shell's; this file writes no CSS.
+    htmltools::div(class = "ca-tablewrap", DT::DTOutput(ns("table"))),
     uiOutput(ns("foot"))
   )
 

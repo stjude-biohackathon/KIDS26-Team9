@@ -127,7 +127,7 @@
   --ca-r-3: 10px;  /* cards, panels                                           */
 
   /* -- geometry ------------------------------------------------------------- */
-  --ca-rail-w: 268px;
+  --ca-rail-w: 312px;   /* holds "Quantitative — Assess Multiple Datasets" in two lines */
   --ca-rail-w-icon: 76px;
   --ca-measure: 68ch;       /* running-text line length                       */
   --ca-motion: 140ms;
@@ -1908,9 +1908,10 @@ table.dataTable thead > tr > th.sorting_desc::after {
    <768px  : the rail becomes a horizontal bar that scrolls sideways
    =========================================================================== */
 @media (max-width: 1199.98px) {
-  /* 252px, not 232px: the label column has to hold "Recommendation" on one
-     line at body size (REVISION_CONTRACT §B.1). */
-  :root { --ca-rail-w: 252px; }
+  /* 280px, not 252px: the label column has to hold "Recommendation" on one
+     line at body size (REVISION_CONTRACT §B.1) and wrap the two long
+     "Quantitative — Assess ... Datasets" names to two lines, not three. */
+  :root { --ca-rail-w: 280px; }
   .ca-statrow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ca-statrow__cell:nth-child(4) { border-left: 0; }
   .ca-statrow__cell:nth-child(n + 4) { border-top: 1px solid var(--ca-rule); }
@@ -2567,3 +2568,482 @@ a[aria-disabled="true"],
 .ca-hat.it::after { left: 57%; }
 
 .ca-bar::after { top: -0.12em; }
+
+/* ===========================================================================
+   24. FINAL_CONTRACT §E — THE RESPONSIVE CONTRACT, §D.5 — THE CURE-MODEL
+       DIAGRAM, and the five new component classes named in §A.3.
+
+   Appended, like §23: NO RULE ABOVE THIS LINE IS CHANGED. Everything here is
+   either a brand-new class or a deliberate, higher-or-equal-specificity
+   override of a rule above, placed last so the cascade resolves it without
+   editing verified code.
+
+   THE RULE (§E.1): nothing may overflow the viewport horizontally at any width
+   from 1920px down to 320px. At each width
+   `document.documentElement.scrollWidth <= clientWidth`. Anything
+   intrinsically wide — a data table, a plot, a typeset equation — scrolls
+   INSIDE ITS OWN CONTAINER and never by pushing the page.
+
+   BREAKPOINTS. Three existed (1200 / 992 / 768) and are untouched. Two are
+   added here, 560 and 400, plus one short-viewport query keyed on height.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   24.1  THE NO-OVERFLOW GUARANTEE
+
+   `overflow-x: clip`, NOT `overflow-x: hidden`. `hidden` turns <body> into a
+   scroll container, and a scroll container between a sticky element and the
+   viewport kills `position: sticky` — the left rail would stop sticking at
+   every width above 768px. `clip` clips without creating one, so the rail is
+   unaffected. It is also the only overflow value that may pair with a visible
+   cross axis, which is what keeps the page scrolling vertically as normal.
+
+   This is the backstop, not the fix. Every wide thing below is given its own
+   scroller; the clip only guarantees that a mistake nobody caught cannot put a
+   horizontal scrollbar on the whole page in front of the room.
+   --------------------------------------------------------------------------- */
+body {
+  overflow-x: clip;
+  overflow-y: visible;
+  max-width: 100%;
+}
+.ca-shell { width: 100%; }
+.ca-main .tab-content,
+.ca-main .tab-pane,
+.ca-section,
+.ca-card__body,
+.ca-rec,
+.ca-note,
+.ca-sens,
+.ca-figure,
+.ca-grid-2 > * { max-width: 100%; }
+/* THE ONE MEASURED OVERFLOW ON A 375px PHONE. `.ca-chip` is `white-space:
+   nowrap` in §6, which is right for "SUFFICIENT" and wrong for the plateau
+   chip, whose label is a 63-character sentence ("The longest observed time is
+   censored, so a plateau is possible"). §6 already grants `white-space: normal`
+   to a chip in a `.ca-card__head` and `max-width: 100%` to a chip with a
+   sibling; the plateau chip is the only chip in the app that is neither — it
+   stands alone in a card BODY — so it fell through both and pushed the page to
+   485px. The grant is simply extended to every chip: a chip short enough to fit
+   never wraps, so nothing else on any tab changes. */
+.ca-chip { max-width: 100%; white-space: normal; text-align: left; }
+
+/* A single unbreakable token (a long file name, a pasted column name) must
+   break rather than widen its column. Applied to running text only, never to
+   a table cell, where the table's own scroller is the right answer. */
+.ca-lede,
+.ca-card__lede,
+.ca-empty__text,
+.ca-sens__row,
+.ca-rec__plain { overflow-wrap: break-word; }
+
+/* ---------------------------------------------------------------------------
+   24.2  .ca-tablewrap — "scrolls inside its own container", §E.5
+
+   Both DT tables (the AIC table on the single-dataset tab, the batch table on
+   the multiple-datasets tab) are wrapped in this by their own module. It is
+   belt and braces with DT's own `scrollX`: DT's scroller can be defeated by a
+   column whose header is wider than the table's own computed width, and this
+   one cannot.
+
+   `min-width: max-content` on the table is what makes the wrapper the thing
+   that scrolls instead of the table squashing. S4 rides on this: the AIC
+   table's error column stays visible and failed rows stay unfiltered at every
+   width — narrowing is NEVER implemented by hiding a column.
+   --------------------------------------------------------------------------- */
+.ca-tablewrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.ca-tablewrap table { min-width: max-content; }
+/* DT paints its own scroll body when scrollX is on; do not double-scroll. */
+.ca-tablewrap .dataTables_scrollBody table { min-width: 0; }
+
+/* ---------------------------------------------------------------------------
+   24.3  .ca-plot--fluid — THE PLOT MECHANISM, §E.3
+
+   `plotOutput(height = "560px")` is banned. `height` is passed through
+   `htmltools::validateCssUnit()`, which REJECTS `clamp()` but ACCEPTS "100%".
+   So: `plotOutput(..., height = "100%")` inside a container that has a CSS
+   `aspect-ratio`. The container's height is then derived from its width;
+   Shiny reports the output div's real clientWidth/clientHeight to the server
+   on every resize; and the PNG is re-rendered at the container's actual size.
+   That is "sizes to its container, not to a fixed pixel height", with no JS.
+
+   `min-height` matters as much as the ratio: it gives the div a resolved
+   height at first paint, before any resize event, so the first render is never
+   zero-sized.
+
+   THE KAPLAN-MEIER PLOT. `km_main` is a ggsurvplot printed with its risk
+   table, so one device carries two stacked panels. 16/10 down to 4/3 keeps the
+   table legible; at 1/1 under 400px it is cramped but readable, which the
+   contract accepts because the alternative is a horizontal scrollbar on the
+   page. `res = 108` and `bg = "transparent"` stay on every renderPlot, and the
+   alt text stays.
+   --------------------------------------------------------------------------- */
+.ca-plot--fluid {
+  /* `width: 100%` is LOad-BEARING, not decoration. With `aspect-ratio` set, a
+     box whose width is shrink-to-fit (a flex item in a column container that
+     does not stretch, an `.ca-empty` sibling, anything inside an accordion
+     panel that has just been opened) derives its WIDTH FROM ITS HEIGHT — so
+     `min-height: 480px` at the <400px breakpoint below made a 480px-wide plot
+     inside a 308px card and put 148px of horizontal overflow on the page.
+     Measured on the Quantitative tab with the exploration accordion open.
+     Pinning the width means the ratio only ever resolves in one direction:
+     width from the container, height from the ratio. */
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 10;
+  min-height: 280px;
+  max-height: 70vh;
+  padding: var(--ca-s-3);
+  position: relative;
+}
+.ca-plot--fluid > .shiny-plot-output,
+.ca-plot--fluid .shiny-plot-output { width: 100%; height: 100%; }
+/* Beats `.ca-plot .shiny-plot-output img { height: auto }` in §13 on
+   specificity, not on luck. object-fit keeps the aspect honest while Shiny is
+   still re-rendering at the new size. */
+.ca-plot--fluid img,
+.ca-plot--fluid .shiny-plot-output img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  max-height: 100%;
+}
+/* The tau ladder is a wide, short figure; the same mechanism, a wider ratio. */
+.ca-plot--wide { aspect-ratio: 21 / 9; min-height: 200px; }
+
+/* ---------------------------------------------------------------------------
+   24.4  .ca-cure-diagram — the Intro cure-model schematic, §D.5
+
+   The diagram is INLINE SVG drawn from constants (§D.2): it inherits the
+   page's custom properties, so dark mode is automatic with no second asset and
+   no filter, and it scales to any width with no fixed pixel height.
+
+   It therefore must NOT sit on the `.ca-figure__img` light plate. That plate
+   exists because the two shipped PNGs carry a baked white ground; an SVG that
+   themes itself would just become a third white rectangle on the Intro page.
+
+   The legend is HTML below the <svg>, not text inside it: text in a 640-unit
+   viewBox rendered at 343px is illegible, and in HTML it scales with page
+   text, stays selectable and stays translatable.
+   --------------------------------------------------------------------------- */
+.ca-cure-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 640px;
+}
+.ca-cure-diagram > svg {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.ca-cure-diagram__key {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: .4rem;
+  font-size: var(--ca-t-small);
+  color: var(--ca-ink-2);
+  width: 100%;
+  max-width: 56ch;
+}
+.ca-cure-diagram__key li {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr;
+  gap: .6rem;
+  align-items: center;
+  margin: 0;
+}
+.ca-cure-diagram__swatch {
+  display: block;
+  height: 0;
+  border-top: 3px solid var(--ca-primary);
+}
+.ca-cure-diagram__swatch--dashed { border-top: 2px dashed var(--ca-ink-3); }
+.ca-cure-diagram__swatch--plateau { border-top: 2px dotted var(--ca-primary); }
+
+/* ---------------------------------------------------------------------------
+   24.5  .ca-figure--eq — the equation figure, MUCH smaller (§G.8, I2)
+
+   The equation plate is 967x108 natural, i.e. a WIDE, SHORT image: left to the
+   shared `.ca-figure__img` rules it is constrained by `max-width: 100%`, never
+   by a height cap, so a `max-height` alone moved it only 134px -> 120px. The
+   width cap is what actually makes it much smaller (I2): 520px renders it at
+   about 520x76, roughly half the area it had, and it still reads at body size.
+   Specificity (0,2,0) so it beats `.ca-figure__img` and the `max-height: none`
+   the <768px block hands every figure. The flowchart is untouched: it keeps its
+   460px cap and its phone behaviour.
+   --------------------------------------------------------------------------- */
+.ca-figure--eq .ca-figure__img { max-width: 520px; max-height: 120px; }
+
+/* ---------------------------------------------------------------------------
+   24.6  .ca-stat--pv — the p-value row in a diagnostics card (§P.2, N1)
+
+   Three cards now carry two labelled quantities instead of one. `.ca-stat`
+   siblings already become a two-column row that aligns every value on one
+   right edge (§5), so all this class adds is (a) tabular numerals, so the
+   p-values line up figure-for-figure across the three cards, and (b) a smaller
+   supporting value for whichever row comes SECOND — which is the p-value on
+   the qn card and the test statistic on the Maller-Zhou card, because §P.2.1
+   and §P.2.2 order each card by its own decision quantity.
+
+   Scoped to a card body that actually contains a p-value row, so no other
+   multi-statistic block in the app is restyled.
+   --------------------------------------------------------------------------- */
+.ca-stat--pv .ca-stat__value { font-variant-numeric: tabular-nums; }
+.ca-card__body:has(.ca-stat--pv) .ca-stat + .ca-stat .ca-stat__value {
+  font-size: calc(var(--ca-t-stat) * 0.62);
+  font-weight: 600;
+  color: var(--ca-ink-2);
+}
+
+/* ---------------------------------------------------------------------------
+   24.7  .ca-sens__verdict — the threshold-testing conclusion, BIGGER (§G.5, N4)
+
+   The two lines under the two sliders. Card-title size, not statistic size:
+   the Recommendation tab's `.ca-rec__decision` is and stays the largest type
+   in the app, and nothing in this dashed panel is a result.
+   --------------------------------------------------------------------------- */
+.ca-sens__verdict {
+  font-size: var(--ca-t-h3);
+  line-height: 1.35;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   24.8  .ca-math — the typeset mathematics, §E.7
+
+   The unicode/HTML mathematics of §19 wraps where it can and scrolls inside
+   itself where it cannot. NO MathJax, no KaTeX, no CDN, no external font: the
+   rendering itself is untouched, this only bounds the box it sits in.
+   --------------------------------------------------------------------------- */
+.ca-math {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: break-word;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* ---------------------------------------------------------------------------
+   24.9  THE EIGHT-ITEM RAIL AT SHORT VIEWPORT HEIGHTS (§B.2, §E.8)
+
+   Eight two-line items plus padding is about 600px, inside the existing
+   `max-height: calc(100vh - 2 * var(--ca-s-5))` cap on a 900px window. On a
+   1280x640 or 1440x720 window it is not, and the cap's own `overflow-y: auto`
+   would make the last steps require a scroll inside the rail. Tightening the
+   item rhythm below 780px of viewport height keeps all eight visible instead.
+   Keyed on height AND on width >=768px, because below 768px the rail is a
+   horizontal bar and none of this applies.
+   --------------------------------------------------------------------------- */
+@media (min-width: 768px) and (max-height: 780px) {
+  .ca-rail {
+    padding: var(--ca-s-2);
+    gap: var(--ca-s-1);
+    top: var(--ca-s-3);
+    max-height: calc(100vh - 2 * var(--ca-s-3));
+  }
+  .ca-rail__link { padding-block: 5px; }
+  .ca-rail__num { width: 23px; height: 23px; }
+  .ca-rail__label { font-size: var(--ca-t-small); }
+  .ca-rail__state { font-size: 0.64rem; }
+  .ca-rail__item + .ca-rail__item .ca-rail__num::before { height: var(--ca-s-2); }
+}
+
+/* ---------------------------------------------------------------------------
+   24.10  <768px — the additions to the existing phone block
+
+   The existing 767.98px query is untouched; these are the things §E.5, §E.6
+   and §E.3 add to it. DT's control row must not sit beside the table on a
+   phone: the search box and the length menu go full width so neither can push
+   the wrapper wider than the screen.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  .ca-plot--fluid { aspect-ratio: 4 / 3; max-height: 60vh; }
+  .ca-plot--fluid.ca-plot--wide { aspect-ratio: 16 / 9; }
+  .ca-figure--eq .ca-figure__img { max-width: 100%; max-height: 84px; }
+  .dataTables_wrapper .dataTables_filter,
+  .dataTables_wrapper .dataTables_length { width: 100%; }
+  .dataTables_wrapper .dataTables_filter input { width: 100%; }
+  .dataTables_wrapper .dataTables_filter label,
+  .dataTables_wrapper .dataTables_length label { width: 100%; }
+}
+
+/* ---------------------------------------------------------------------------
+   24.11  <560px — NEW BREAKPOINT (§E.2)
+
+   The sliders in the threshold-testing panel carry an inline `width: 22rem`
+   from `sliderInput()`. 22rem is 374px at the 17px root, which is wider than a
+   375px viewport once the shell padding is counted — the one place in the app
+   where an inline style, not a rule, is the overflow. `!important` is the only
+   thing that beats an inline style, and it is used here and nowhere else.
+   --------------------------------------------------------------------------- */
+@media (max-width: 559.98px) {
+  .ca-sens { padding: var(--ca-s-3); }
+  .ca-sens__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ca-sens__row .shiny-input-container,
+  .ca-sens__row .form-group,
+  .ca-sens__row .irs,
+  .ca-sens__row .js-range-slider {
+    width: 100% !important;
+    max-width: 100%;
+  }
+  .ca-sens__verdict { font-size: var(--ca-t-body); }
+  .ca-cure-diagram__key { font-size: var(--ca-t-micro); }
+  .ca-cure-diagram__key li { grid-template-columns: 1.8rem 1fr; gap: .45rem; }
+  .ca-card { padding: var(--ca-s-3); }
+  .ca-rec { padding: var(--ca-s-4); }
+  .ca-empty { padding: var(--ca-s-5) var(--ca-s-4); }
+  .dataTables_wrapper .dataTables_filter input { width: 100%; }
+  .ca-stat__value { font-size: 1.75rem; }
+}
+
+/* ---------------------------------------------------------------------------
+   24.12  <400px — NEW BREAKPOINT (§E.2)
+
+   A 375px phone. Page titles drop a step, the recommendation headline drops to
+   1.5rem, the rail items tighten, and a card's chip moves BELOW its title
+   instead of trying to share a line with it: `.ca-card__head` is already a
+   wrapping flex row, so a column direction is the whole change and the chip
+   keeps its left edge instead of floating out to the right.
+   --------------------------------------------------------------------------- */
+@media (max-width: 400px) {
+  .ca-section__title { font-size: var(--ca-t-h3); }
+  .ca-rec__decision { font-size: 1.5rem; max-width: none; }
+  .ca-hero { padding: var(--ca-s-3); }
+  .ca-hero > h1, .ca-hero > h2 { font-size: 1.6rem; }
+  .ca-rail { padding: var(--ca-s-1); }
+  .ca-rail__link { padding: var(--ca-s-1); }
+  .ca-card__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--ca-s-2);
+  }
+  .ca-card__head .ca-chip { align-self: flex-start; }
+  /* MEASURED, not assumed. §E.3 rules 1/1 here and accepts a cramped risk
+     table; at 375px that is 308x308, and at 308px tall `ggsurvplot` does not
+     render a cramped risk table, it renders NO risk-table row at all — the
+     counts fall outside the panel and the y-axis title "Survival Probability"
+     is cut. E.8 forbids clipped text, so the ratio is kept and the floor is
+     raised instead: 480px is the first height at which the counts come back
+     (410px and 440px both still cut them). The card grows taller on a phone,
+     which is the cheap direction — the page scrolls vertically anyway, and the
+     alternative was a horizontal scrollbar or a figure missing a panel.
+     `max-height: none` because the <768px cap of 60vh would otherwise fight
+     the floor on a short handset. `.ca-plot--wide` carries no risk table, so
+     it keeps its own small floor. */
+  .ca-plot--fluid {
+    aspect-ratio: 1 / 1;
+    min-height: 480px;
+    max-height: none;
+    padding: var(--ca-s-2);
+  }
+  .ca-plot--fluid.ca-plot--wide { aspect-ratio: 4 / 3; min-height: 200px; }
+  .ca-stat + .ca-stat { column-gap: var(--ca-s-2); }
+  .ca-shell { padding: var(--ca-s-2); }
+  /* §E.7: the unicode mathematics wraps rather than scrolls WHERE IT CAN, and
+     an inline expression in running prose is exactly where it can. Measured:
+     at 320px the qn-threshold expression on Documentation is 290px inside a
+     275px column, and it was the last thing in the app that pushed the page
+     wide. §19 sets `white-space: nowrap` on both math classes, which is what
+     holds an expression on one line and is right at every width the app is
+     actually demonstrated at; below 400px it is allowed to break instead.
+     `.ca-eq` already declares `white-space: normal` for display math, so a
+     wrapping expression is an idiom this system already has, and `anywhere`
+     rather than `break-word` because only `anywhere` also shrinks the
+     element's min-content width, which is what stops the parent widening.
+     A BOUND ON THE BOX, NOT A CHANGE TO THE RENDERING: the glyphs, accents,
+     operator spacing and fraction are §19's and are untouched. Still no
+     MathJax, no KaTeX, no CDN, no external font. */
+  .ca-m, .ca-eq { white-space: normal; overflow-wrap: anywhere; }
+}
+
+/* ---------------------------------------------------------------------------
+   24.12  THE LONE p-VALUE ROW (§P, N1) — INTEGRATOR
+
+   `.ca-stat` is a baseline flex row on its own and only becomes a right-
+   aligned grid row once it HAS A SIBLING (§707 above). That was right when
+   every card carried either one statistic or four. N1 broke the symmetry: the
+   Maller-Zhou and qn cards now carry TWO rows each, so their numbers align on
+   the card's right edge, while the Shen card carries ONE and printed
+   "p-value 0.3676" inline. Three diagnostics cards the lead asked to be read
+   together were being set two different ways, which reads as a mistake.
+
+   A p-value row therefore takes the grid layout whether or not it has a
+   sibling. The declarations are the same ones the sibling rule uses, so the
+   Maller-Zhou and qn cards (where the more specific `:has(+ .ca-stat)` rule
+   already wins) are byte-identical on screen; only the lone Shen row moves.
+   --------------------------------------------------------------------------- */
+.ca-stat--pv {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--ca-s-4);
+  margin-block: var(--ca-s-2);
+}
+.ca-stat--pv .ca-stat__value { justify-self: end; text-align: right; }
+
+/* ---------------------------------------------------------------------------
+   24.13  THE BATCH TAB'S OWN LAYOUT (T1, G1) — INTEGRATOR
+
+   Batch used to live inside an accordion on Recommendation, where it was
+   narrow and nobody saw its proportions. T1 gave it a full page, and on one it
+   read badly: `.ca-batch` and its two children have no rules at all, so the
+   chooser was a single 1080px-tall column of checkboxes occupying the left
+   40% of a 1031px page, and the results table — the thing the tab is for —
+   started below the fold on every screen.
+
+   Two changes, both layout only. No control is added, removed, relabelled or
+   reordered, and no id changes, so every input binding is untouched.
+
+   1. `.ca-batch` becomes a grid so the gap between the chooser and the results
+      is stated once instead of falling out of margin collapse (it was 16px).
+
+   2. The five dataset groups flow into as many columns as fit. This is an
+      auto-fill GRID and not CSS `columns`, which was tried first and had to be
+      abandoned: a multi-column box does not shrink a column below its
+      contents' min-content width, so at 1280px the three columns demanded by
+      `columns: 3` pushed the page 57px wide — caught by the width sweep, not
+      by eye. `auto-fill` + `minmax(min(100%, 240px), 1fr)` cannot do that: the
+      track floor collapses to the container on a narrow screen, so the layout
+      is one column on a phone, two on a tablet and three or four at desk
+      width with no breakpoint of its own, and `min-width: 0` on the children
+      stops a long label from forcing a track wider than its share.
+
+   `display: grid` also replaces the framework's `display: contents` on this
+   uiOutput mount. That is load-bearing: with `contents` the element generates
+   no box at all, so neither `columns` nor `grid-template-columns` applies —
+   which is why the first version of this rule appeared to do nothing.
+   --------------------------------------------------------------------------- */
+.ca-batch {
+  display: grid;
+  gap: var(--ca-s-6);
+}
+
+.ca-batch__chooser [id$="-pick_sets"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: var(--ca-s-5) var(--ca-s-6);
+  align-items: start;
+}
+.ca-batch__chooser [id$="-pick_sets"] > .form-group {
+  margin: 0;
+  min-width: 0;
+}
+/* A dataset label is a sentence, not a token: let it wrap inside its track
+   rather than reach for width the track does not have. */
+.ca-batch__chooser [id$="-pick_sets"] .checkbox label,
+.ca-batch__chooser [id$="-pick_sets"] .shiny-options-group label {
+  overflow-wrap: break-word;
+}
