@@ -5,7 +5,8 @@
 # This file, and only this file, knows the tab order. It attaches the
 # libraries, creates the one shared reactive state object, defines the one
 # navigation callback, builds the left rail and the hidden navset, and calls
-# the six module servers. It contains no statistics and no package call sites.
+# the seven module servers. It contains no statistics and no package call
+# sites.
 #
 # Run it with:  shiny::runApp("app")   from the repository root
 #          or:  shiny::runApp()        from inside app/
@@ -40,10 +41,11 @@ if (requireNamespace("cureAssess", quietly = TRUE)) {
 #   survival::, survminer::, dplyr::, htmltools::, stats::, utils::, grid::
 # flexsurv and flexsurvcure are NEVER called by app code.
 # FIXPASS (reverifier): this line used to say the same of rmarkdown, which
-# stopped being true when the report download was reinstated. mod_conclusion.R
-# now calls rmarkdown::pandoc_available(), rmarkdown::find_pandoc() and
-# rmarkdown::render() from its downloadHandler, always namespaced and never
-# via library(). The comment was the only thing that was wrong.
+# stopped being true when the report download was reinstated.
+# mod_recommendation.R now calls rmarkdown::pandoc_available(),
+# rmarkdown::find_pandoc() and rmarkdown::render() from its downloadHandler,
+# always namespaced and never via library(). The comment was the only thing
+# that was wrong.
 
 # ---- auto-load fallback: the only source() in the repository ---------------
 # Shiny sources every app/R/*.R file automatically, alphabetically, relative to
@@ -64,10 +66,16 @@ if (!exists("ca_bs_theme", mode = "function")) {
 # Swapping two ids here reorders the rail and the panels together. The rail
 # numbers come from seq_along(NAV_ORDER); nothing else in the repo depends on
 # position, because every other reference is by id.
-NAV_ORDER <- c("intro", "data", "quant", "qual", "conclusion", "docs")
+#
+# REVISION_CONTRACT §B.1: seven tabs, and they now run in the published order
+# of reasoning — expert judgment, then visual, then quantitative. The old
+# "conclusion" id is dead and is NOT in this vector, so go_to() rejects it: any
+# stale navigation to it stops() loudly on the first click, by design.
+NAV_ORDER <- c("intro", "expert", "data", "qual", "quant", "rec", "docs")
 
-CA_NAV_LABELS <- c(intro = "Intro", data = "Data", quant = "Quantitative",
-                   qual = "Qualitative", conclusion = "Conclusion", docs = "Documentation")
+CA_NAV_LABELS <- c(intro = "Intro", expert = "Expert judgment", data = "Data",
+                   qual = "Qualitative", quant = "Quantitative",
+                   rec = "Recommendation", docs = "Documentation")
 
 
 # =============================================================================
@@ -77,7 +85,9 @@ CA_NAV_LABELS <- c(intro = "Intro", data = "Data", quant = "Quantitative",
 ui <- bslib::page_fluid(
   theme = ca_bs_theme(),
   htmltools::tags$head(
-    htmltools::tags$title("cureAssess — is a cure model appropriate?"),
+    # C1: the browser tab is visible UI too, and app-v2 already dropped the
+    # package name from it. All three versions now show the same tab text.
+    htmltools::tags$title("Is a cure model appropriate?"),
     htmltools::tags$link(rel = "stylesheet", href = "app.css")
   ),
   bslib::input_dark_mode(id = "ca_mode", mode = "light"),
@@ -93,17 +103,33 @@ ui <- bslib::page_fluid(
 
     htmltools::tags$main(
       class = "ca-main",
+
+      # V2_CONTRACT §B.5 — the other half of the progress indication.
+      # With the Run and Prepare buttons gone (R2) the app computes on its own,
+      # and withProgress() plus the .recalculating dim carry that to anyone
+      # watching the screen. This carries it to anyone who is not: one polite
+      # live region holding ca_status_line(), which states no number, names no
+      # method and is visually hidden, so it adds ZERO visible words (C2).
+      htmltools::tags$div(
+        class = "ca-sr",
+        role = "status",
+        `aria-live` = "polite",
+        `aria-atomic` = "true",
+        shiny::textOutput("ca_status", inline = TRUE)
+      ),
+
       # Written out literally in NAV_ORDER order: splicing into navset_hidden()
-      # is the one place bslib 0.12.0 is fussy, and six literal lines cannot
-      # break. If NAV_ORDER changes, reorder these six lines to match.
+      # is the one place bslib 0.12.0 is fussy, and seven literal lines cannot
+      # break. If NAV_ORDER changes, reorder these seven lines to match.
       bslib::navset_hidden(
         id = "ca_nav",
-        bslib::nav_panel_hidden(value = "intro",      mod_intro_ui("intro")),
-        bslib::nav_panel_hidden(value = "data",       mod_data_ui("data")),
-        bslib::nav_panel_hidden(value = "quant",      mod_quantitative_ui("quant")),
-        bslib::nav_panel_hidden(value = "qual",       mod_qualitative_ui("qual")),
-        bslib::nav_panel_hidden(value = "conclusion", mod_conclusion_ui("conclusion")),
-        bslib::nav_panel_hidden(value = "docs",       mod_docs_ui("docs"))
+        bslib::nav_panel_hidden(value = "intro",  mod_intro_ui("intro")),
+        bslib::nav_panel_hidden(value = "expert", mod_expert_ui("expert")),
+        bslib::nav_panel_hidden(value = "data",   mod_data_ui("data")),
+        bslib::nav_panel_hidden(value = "qual",   mod_qualitative_ui("qual")),
+        bslib::nav_panel_hidden(value = "quant",  mod_quantitative_ui("quant")),
+        bslib::nav_panel_hidden(value = "rec",    mod_recommendation_ui("rec")),
+        bslib::nav_panel_hidden(value = "docs",   mod_docs_ui("docs"))
       )
     )
   )
@@ -119,18 +145,40 @@ server <- function(input, output, session) {
   # ---- the ONE shared state object ----------------------------------------
   # Closed list: no module adds, renames or repurposes a field. Modules talk to
   # each other only through this object and through go_to().
+  #
+  # REVISION_CONTRACT §C.1. expert_q1 / expert_q2 / expert_confirmed are
+  # written only by mod_expert.R (and cleared by mod_data.R on a dataset
+  # change); expert_confirmed is derived from the two answers and is never
+  # inferred from a statistic. Two fields are retired by §C.2 — the visual
+  # acknowledgement flag and the free-text expert note — and neither the
+  # declaration below nor any read site mentions them any more.
+  #
+  # V2_CONTRACT §B.6 and §C — two fields are added this pass, and only two:
+  #   tau_result  the tau-ladder exploration result (mod_quantitative.R). It is
+  #               DISPLAY-ONLY: it never reaches ca_recommendation() and never
+  #               reaches report.Rmd (§B.1, §C.3). It lives on state rather than
+  #               in a module-local reactive so that ca_reset_assessment() can
+  #               clear it, which is what keeps an exploration from outliving
+  #               the mapping it was computed on.
+  #   batch       the batch result frame (mod_batch.R), cleared for the same
+  #               reason: its rows are cached on a provenance key that includes
+  #               the mapping tuple (§C.6).
+  # Both are nulled by ca_reset_assessment() (helpers.R F.13), which the
+  # auto-prepare observer calls as its first statement. Nothing else adds,
+  # renames or repurposes a field.
   state <- reactiveValues(
     nav = "intro", dark = FALSE,
     raw = NULL, label = NULL, source = NULL, map = NULL, dropped = NULL,
     prepared = NULL, fit = NULL, assess = NULL,
     include_lognormal = FALSE, alpha = 0.05, alpha_tests = NULL,
-    expert_confirmed = FALSE, expert_note = "", visual_ack = FALSE,
+    tau_result = NULL, batch = NULL,
+    expert_q1 = "", expert_q2 = "", expert_confirmed = FALSE,
     status = "empty", last_error = NULL
   )
 
   # ---- the navigation callback --------------------------------------------
   # Defined once, closing over the root session, and passed unchanged to all
-  # six modules. It switches the visible panel and updates state$nav, and does
+  # seven modules. It switches the visible panel and updates state$nav, and does
   # nothing else: navigating is not an analysis event, so it never touches
   # prepared, assess or status. Safe and idempotent from any state, including
   # the empty one. An illegal tab id stops loudly so a typo is caught the first
@@ -165,33 +213,71 @@ server <- function(input, output, session) {
   # Rendered, not messaged. Locked items stay clickable and stay in the tab
   # order: clicking one still navigates, and the destination tab's own empty
   # state explains what is missing and offers the control that goes there.
+  # REVISION_CONTRACT §B.3, one row per tab. `qual` no longer reports "done"
+  # off an expert tick — that signal moved to `expert`, and it is read through
+  # ca_expert_state() so the three-way outcome has exactly one implementation.
+  #
+  # V2_CONTRACT §B — WHAT AUTO-COMPUTE CHANGES HERE.
+  # The rail used to key its locks on `state$prepared` and `state$assess`, which
+  # was right when a human had to press Prepare and Run: a NULL there meant "you
+  # have not done this yet". With both buttons gone (R2) a NULL there means
+  # something completely different — the recompute triggered by the last mapping
+  # change has not landed yet, ~150 ms. Keying locks on those two fields would
+  # make three rail items flicker Locked -> Ready on every debounced change, and
+  # would contradict §B.2's promise that `rec` is never locked.
+  #
+  # So "Locked" now means exactly one thing: THERE IS NO USABLE DATA IN THE APP.
+  # That is `state$raw` empty, or a preparation that failed outright. Anything
+  # else is either computed ("Done") or computing ("Ready"), and a step that is
+  # computing shows the same state as one waiting to be read, because from the
+  # user's side there is nothing to do in either case. `expert` is untouched and
+  # is now the only rail item that tracks something the user must actually do.
   output$ca_rail <- renderUI({
-    st         <- state$status
-    has_prep   <- !is.null(state$prepared)
-    has_assess <- !is.null(state$assess)
+    st <- state$status
+
+    # Anything downstream of preparation exists, or is on its way.
+    usable <- !is.null(state$raw) && !identical(st, "error")
 
     states <- c(
-      intro      = "done",
-      data       = if (st %in% c("prepared", "assessed")) "done" else "ready",
-      quant      = if (!has_prep) "locked" else if (identical(st, "assessed")) "done" else "ready",
-      qual       = if (!has_prep) "locked" else if (isTRUE(state$expert_confirmed)) "done" else "ready",
-      conclusion = if (!has_assess) "locked" else "ready",
-      docs       = "ready"
+      intro  = "done",
+      expert = if (identical(ca_expert_state(state), "unanswered")) "ready" else "done",
+      data   = if (usable && st %in% c("prepared", "assessed")) "done" else "ready",
+      qual   = if (!usable) "locked" else "ready",
+      quant  = if (!usable) "locked"
+               else if (identical(st, "assessed") && !is.null(state$assess)) "done"
+               else "ready",
+      rec    = if (!usable) "locked" else "ready",
+      docs   = "ready"
     )
 
     ca_rail(NAV_ORDER, CA_NAV_LABELS, states = states, active = state$nav)
   })
 
-  # ---- the six module servers ---------------------------------------------
+  # ---- the progress announcement -------------------------------------------
+  # Paired with the visually-hidden live region in the UI. helpers.R F.24 owns
+  # the wording; the shell only mounts it.
+  output$ca_status <- shiny::renderText(ca_status_line(state))
+
+  # ---- the seven module servers -------------------------------------------
   # Module id equals nav id throughout, so input ids on the Data tab are
-  # namespaced "data-..." and so on. The automatic first-load Prepare of the
-  # default dataset belongs to mod_data (contract C.1, owner tabs-a); the shell
-  # does not reach into another module's inputs to trigger it.
+  # namespaced "data-..." and so on. The first-load preparation of the default
+  # dataset belongs to mod_data's auto-prepare observer (V2_CONTRACT §B.2,
+  # `ignoreInit = FALSE`); the shell does not reach into another module's inputs
+  # to trigger it.
+  #
+  # BATCH IS NOT AN EIGHTH TAB (V2_CONTRACT §C.6, §H.10). `mod_batch_ui()` and
+  # `mod_batch_server()` are mounted by mod_recommendation.R, inside the
+  # Recommendation tab, as one accordion panel closed by default. Seven tabs is
+  # the structure the lead approved, and the Recommendation tab already is "one
+  # recommendation, and the download" — batch is "many recommendations, and a
+  # download". So NAV_ORDER, CA_NAV_LABELS and the navset above are unchanged,
+  # and the rail gains no row.
   mod_intro_server("intro", state, go_to)
+  mod_expert_server("expert", state, go_to)
   mod_data_server("data", state, go_to)
-  mod_quantitative_server("quant", state, go_to)
   mod_qualitative_server("qual", state, go_to)
-  mod_conclusion_server("conclusion", state, go_to)
+  mod_quantitative_server("quant", state, go_to)
+  mod_recommendation_server("rec", state, go_to)
   mod_docs_server("docs", state, go_to)
 
   invisible(NULL)
