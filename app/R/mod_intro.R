@@ -1,61 +1,58 @@
 # ---------------------------------------------------------------------------
-# mod_intro.R — the Intro tab (builder-tabs-a)
+# mod_intro.R — the Intro tab (owner: rewriter-intro)
 #
-# Static, always renders: no empty state and no error state (contract J.10).
-# Every statistical sentence is the canonical contract J.9 copy, taken from the
-# CA_COPY_* constants in helpers.R rather than retyped here, so this tab and
-# the Documentation tab can never drift apart.
+# REVISION v2.0: gutted to a few lines of copy plus the two poster figures.
+# Deleted this pass (REVISION_CONTRACT §E.1): .intro_steps() and the
+# "The three-step check" card (#1), the "What this app does not do" note (#2),
+# the "Data and ethics" note (#3, moved to Documentation), the long
+# old page lede with its (1 - p) notation (#4), and the
+# "Start with an example dataset →" control, whose replacement now goes to the
+# Expert judgment tab, not to Data (#5).
+#
+# Every sentence below is REVISION_CONTRACT §G.1, pasted verbatim. The two
+# captions are the team lead's own poster wording. No prose here spells out the
+# three checks: the flowchart image carries them (§H.1).
+#
+# Static, always renders: no empty state and no error state (§G.9).
+# This tab reads no `state` field and no package field, so there is no field
+# provenance to record.
+#
+# V2_CONTRACT (this pass, owner builder-rec):
+#   * §E.5 #3 / R1 — the one-line caption that used to sit under the flowchart,
+#     asserting that the checks run in a fixed order and that a "no" ends the
+#     assessment, is DELETED, and the flowchart's alt text is rewritten so it
+#     does not restate it. Nothing replaces it: C2 says when in doubt, delete.
+#     Neither the sentence nor a paraphrase of it may return, here or in
+#     app-v2/ or app-v3/.
+#   * R2 — there is no Run button and no Prepare button anywhere in app/. The
+#     first built-in dataset is prepared and assessed before first paint
+#     (§B.2, ignoreInit = FALSE), so every later tab already has an answer on
+#     it by the time the reader arrives. The only control on this tab is
+#     navigation, which R2 explicitly leaves alone.
 # ---------------------------------------------------------------------------
 
 
-#' The three-step strip shown on Intro
+#' A poster figure with its caption
 #'
-#' A compact visual of the published order ① expert judgment → ② visual →
-#' ③ quantitative, using the `ca-steps` classes. Every step sits at
-#' `data-ca-state="pending"`: Intro describes the method, it does not report on
-#' the current dataset, so no step ever shows a verdict here.
-#'
-#' The per-step sentences are the contract's own: ① is the line J.10 fixes for
-#' the expert-judgment section, ② and ③ only say which tab does the work.
-#'
-#' @return an `htmltools` `<ol class="ca-steps">`
+#' @param src web path under `app/www` — always `"img/..."`, no leading slash,
+#'   because Shiny serves `app/www` as the web root (§H).
+#' @param alt long-form alternative text; the §H alt strings are pasted whole.
+#' @param cap caption text.
+#' @return an `htmltools` `<figure class="ca-figure">`
 #' @noRd
-.intro_steps <- function() {
-  step <- function(marker, title, body) {
-    htmltools::tags$li(
-      class = "ca-step", `data-ca-state` = "pending",
-      htmltools::tags$span(class = "ca-step__marker", marker),
-      htmltools::tags$span(class = "ca-step__rail"),
-      htmltools::tags$div(
-        htmltools::tags$h3(class = "ca-step__title", title),
-        htmltools::tags$p(class = "ca-step__body", body)
-      )
-    )
-  }
-
-  htmltools::tags$ol(
-    class = "ca-steps",
-    step(
-      "①", "Expert judgment",
-      "Yours. Software cannot judge clinical plausibility. This step is a conversation with a clinician."
-    ),
-    step(
-      "②", "Visual assessment",
-      "Automated by this app — the Kaplan-Meier curve and its reading guide, on the Data and Qualitative steps."
-    ),
-    step(
-      "③", "Quantitative assessment",
-      "Automated by this app — the five diagnostics, on the Quantitative step."
-    )
+.intro_figure <- function(src, alt, cap) {
+  htmltools::tags$figure(
+    class = "ca-figure",
+    htmltools::tags$img(src = src, class = "ca-figure__img", alt = alt),
+    htmltools::tags$figcaption(class = "ca-figure__cap", cap)
   )
 }
 
 
 #' Intro tab UI
 #'
-#' Order is fixed by contract J.9: title, the mixture-cure-model copy (which
-#' states the three steps and the conjunction rule), the three-step visual, the
-#' "what this app does not do" note, the start control, then data and ethics.
+#' Title, one lede line, the flowchart, the equation, one control. Nothing
+#' else on this tab (§G.1).
 #'
 #' @param id module id, equal to the nav id `"intro"`
 #' @noRd
@@ -65,44 +62,46 @@ mod_intro_ui <- function(id) {
   htmltools::tags$div(
     class = "ca-section",
 
-    htmltools::tags$h1(class = "ca-section__title", CA_COPY_INTRO_TITLE),
+    htmltools::tags$h1(class = "ca-section__title",
+                       "Is a cure model right for your data?"),
 
-    # Contract J.9, verbatim: what a mixture cure model is, why a plateau is
-    # not proof, the three steps, and "a conjunction, not a score".
-    htmltools::tags$div(class = "ca-lede", htmltools::HTML(CA_COPY_INTRO_HTML)),
-
-    # The same three steps as a visual, immediately under the rule that governs
-    # them.
-    ca_card(
-      title = "The three-step check",
-      lede = "The order below is the order of reasoning. These tabs run ③ before ② only because that is the more convenient order to work in.",
-      body = .intro_steps()
+    htmltools::tags$p(
+      class = "ca-lede",
+      paste("A cure model assumes some patients never have the event. It fits only when that group",
+            "really exists and follow-up is long enough to see it.")
     ),
 
-    # Contract J.9, verbatim; repeated on Documentation.
-    ca_note("info", CA_COPY_NOT_DO_TITLE, htmltools::HTML(CA_COPY_NOT_DO_HTML)),
+    # The flowchart leads the tab: it replaces the deleted three-step strip and
+    # carries the three checks in the lead's own wording (§H.1).
+    #
+    # V2_CONTRACT §E.5 #3 (R1): the caption that sat under this figure is
+    # DELETED, and this alt text is rewritten so that it no longer reads as
+    # that sentence. It now names the three checks and nothing else: no
+    # ordering claim, no stopping claim. Do not reintroduce either.
+    .intro_figure(
+      src = "img/workflow-flowchart.png",
+      alt = paste("A flowchart of three checks. Expert judgment: is a cure biologically plausible,",
+                  "and is long-term survival without recurrence expected? Visual assessment: does the",
+                  "survival curve plateau, with late events absent? Quantitative assessment: is there",
+                  "strong quantitative evidence of sufficient follow-up and a cure fraction?"),
+      cap = "Cure-model appropriateness"
+    ),
 
-    # The start control (J.9): the only interactive element on this tab.
+    # The equation, with the poster's own line. The notation in the alt text is
+    # the poster's: S_a(t) = pi_a + (1 - pi_a) S_u,a(t), pi_a the cure fraction
+    # — never the README's (1 - p) form (§H.2).
+    .intro_figure(
+      src = "img/mixture-cure-model.png",
+      alt = paste("Mixture cure model: overall survival in group a equals the cure fraction pi_a plus",
+                  "one minus pi_a times the survival of the uncured in group a."),
+      cap = "Cure models estimate the cure fraction and the survival of the uncured separately."
+    ),
+
+    # The only interactive element on the tab, and it goes to Expert judgment:
+    # that is the first real step, not Data (§G.1).
     htmltools::tags$div(
       class = "ca-hero",
-      actionButton(ns("to_data"), CA_COPY_INTRO_CTA, class = "btn btn-primary btn-lg")
-    ),
-
-    # Data and ethics. Procedural, not statistical: where files go, not what
-    # the numbers mean.
-    ca_note(
-      "info",
-      "Data and ethics",
-      htmltools::tagList(
-        htmltools::tags$p(
-          "The built-in examples are public, de-identified datasets distributed with the ",
-          htmltools::tags$code("survival"),
-          " package, plus four simulated scenarios generated by a script in this repository. No patient-identifiable data ships with this app."
-        ),
-        htmltools::tags$p(
-          "A CSV you upload is read into this R session on this machine only. Nothing is transmitted anywhere, nothing is written to disk by the app, and nothing is stored once the session ends."
-        )
-      )
+      actionButton(ns("to_expert"), "First check →", class = "btn btn-primary btn-lg")
     )
   )
 }
@@ -115,13 +114,13 @@ mod_intro_ui <- function(id) {
 #'
 #' @param id module id, `"intro"`
 #' @param state the one shared `reactiveValues`; unused here, kept because the
-#'   module signature in contract section D is fixed
+#'   module signature in REVISION_CONTRACT §D.1 is fixed
 #' @param go_to the navigation callback from `app.R`
 #' @noRd
 mod_intro_server <- function(id, state, go_to) {
   moduleServer(id, function(input, output, session) {
 
-    ca_on_click(input, "to_data", function() go_to("data"))
+    ca_on_click(input, "to_expert", function() go_to("expert"))
 
     invisible(NULL)
   })

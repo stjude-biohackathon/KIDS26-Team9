@@ -368,6 +368,18 @@ code { color: var(--ca-ink); background: var(--ca-surface-3);
   gap: var(--ca-s-4);
   min-width: 0;
 }
+/* A row of forward/back navigation buttons at the foot of a tab. .ca-section
+   is a COLUMN flex container, so buttons dropped straight into it stretch to
+   full width and stack; this keeps them inline at their natural width. */
+.ca-navrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ca-s-3);
+  align-items: center;
+}
+.ca-navrow > .btn,
+.ca-navrow > .action-button { flex: 0 0 auto; }
+
 .ca-section__title {
   font-family: var(--ca-font-serif);
   font-size: var(--ca-t-h2);
@@ -440,6 +452,13 @@ bslib-input-dark-mode {
    A LOCKED item is styled, never disabled: it keeps its place in the tab order
    and it still navigates (§E.2).
    =========================================================================== */
+/* REVISION_CONTRACT §B.1: the rail carries SEVEN items now, not six. Seven
+   two-line items plus the padding is about 560px, which overruns a 13-inch
+   laptop window that is already scrolled; a sticky element taller than the
+   viewport pins its bottom off-screen and the last item becomes unreachable.
+   Capping the height and letting the rail scroll inside itself keeps every
+   step clickable at any window height. The cap is lifted in the <768px block
+   below, where the rail is a horizontal bar and scrolls sideways instead. */
 .ca-rail {
   position: sticky;
   top: var(--ca-s-5);
@@ -450,6 +469,9 @@ bslib-input-dark-mode {
   background: var(--ca-surface-2);
   border: 1px solid var(--ca-rule);
   border-radius: var(--ca-r-3);
+  max-height: calc(100vh - 2 * var(--ca-s-5));
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 .ca-rail > ul,
 .ca-rail > ol,
@@ -535,12 +557,18 @@ bslib-input-dark-mode {
 }
 .ca-rail__glyph:empty { display: none; }
 .ca-rail__glyph svg { display: block; width: 20px; height: 20px; }
+/* REVISION_CONTRACT §B.1 brought in the two longest labels this rail has ever
+   carried, "Recommendation" and "Documentation". `overflow-wrap: anywhere`
+   split them mid-word ("Recommendati / on") in the 992-1200px band, so the
+   label now breaks at spaces first and falls back to a hyphenated break; the
+   band's rail is also a little wider (see §17). */
 .ca-rail__label {
   grid-area: label;
   font-size: var(--ca-t-body);
   font-weight: 500;
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 .ca-rail__state {
   grid-area: state;
@@ -825,47 +853,23 @@ bslib-input-dark-mode {
 .ca-tech__body > * + * { margin-top: var(--ca-s-2); }
 .ca-tech__body code { background: transparent; padding: 0; color: var(--ca-ink); }
 
-/* One monospace line saying where a number came from:
-   cure.appropriateness() -> $tests$receus$r_hat                        (§F.16) */
+/* Small print. ca_provenance() is withdrawn (REVISION_CONTRACT §D.3) and no
+   call-and-field line is ever shown, but the style stays: it is what the Data
+   sidebar hints and the one-line footnotes are set in. */
+/* Small print: sidebar hints and one-line footnotes. The name is legacy — this
+   was the style for the on-screen provenance lines (function names and field
+   paths), which is why it was monospace. Those lines are gone; what is left is
+   ordinary prose, and prose set in a code face reads as code. */
 .ca-provenance {
-  font-family: var(--ca-font-mono);
+  font-family: var(--ca-font-sans);
   font-size: var(--ca-t-micro);
   line-height: 1.5;
   color: var(--ca-ink-3);
   overflow-wrap: anywhere;
 }
 
-/* The Documentation tab's field-by-field provenance table. */
-.ca-provenance-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--ca-t-small);
-  color: var(--ca-ink-2);
-}
-.ca-provenance-table th {
-  text-align: left;
-  font-size: var(--ca-t-micro);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ca-ink-3);
-  padding: var(--ca-s-2) var(--ca-s-3) var(--ca-s-2) 0;
-  border-bottom: 1px solid var(--ca-rule-2);
-  white-space: nowrap;
-}
-.ca-provenance-table td {
-  padding: var(--ca-s-2) var(--ca-s-3) var(--ca-s-2) 0;
-  border-bottom: 1px solid var(--ca-rule);
-  vertical-align: top;
-  overflow-wrap: anywhere;
-}
-.ca-provenance-table td:not(:first-child) {
-  font-family: var(--ca-font-mono);
-  font-size: 0.95em;
-  font-variant-numeric: tabular-nums;
-  color: var(--ca-ink);
-}
-.ca-provenance-table tr:last-child td { border-bottom: 0; }
+/* REVISION_CONTRACT §E.9: .ca-provenance-table is deleted with the
+   Documentation tab's field-by-field provenance table (§E.6 #49). */
 
 /* Tooltip trigger (§F.12). Dotted underline + a small info glyph: discoverable
    without being loud, and it never looks like a link. */
@@ -881,99 +885,13 @@ bslib-input-dark-mode {
 .ca-tip:hover svg { color: var(--ca-primary); }
 
 /* ===========================================================================
-   8. THE THREE-STEP STRIP (Conclusion) — manuscript order, always 1-2-3
-   <ol class="ca-steps">
-     <li class="ca-step" data-ca-state="pending">
-       <span class="ca-step__rail"><span class="ca-step__marker">1</span></span>
-       <div class="ca-step__body">
-         <h3 class="ca-step__title">Expert judgment</h3> … </div></li>
-   data-ca-state = pending | pass | fail | void
-   =========================================================================== */
-.ca-steps {
-  list-style: none;
-  margin: 0;
-  padding: var(--ca-s-5);
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  background: var(--ca-surface);
-  border: 1px solid var(--ca-rule);
-  border-radius: var(--ca-r-3);
-}
-.ca-step {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ca-s-3);
-  min-width: 0;
-  margin: 0;
-}
-/* The connector lives in the step's own marker row and flexes to fill the rest
-   of the grid cell, so it starts on this marker and ends where the next one
-   begins. It carries the state of the step it LEAVES: the chain visibly stops
-   where the workflow stopped. */
-.ca-step__rail { display: flex; align-items: center; }
-.ca-step:not(:last-child) .ca-step__rail::after {
-  content: "";
-  flex: 1 1 auto;
-  height: 2px;
-  margin-left: var(--ca-s-1);
-  background: var(--ca-state-line, var(--ca-rule-2));
-}
-.ca-step__marker {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 36px; height: 36px;
-  flex: none;
-  border-radius: 50%;
-  border: 2px solid var(--ca-state-line, var(--ca-rule-2));
-  background: var(--ca-state-bg, var(--ca-surface));
-  color: var(--ca-state-ink, var(--ca-ink-3));
-  box-shadow: 0 0 0 4px var(--ca-surface);   /* the ring that clears the line */
-  font-family: var(--ca-font-mono);
-  font-size: var(--ca-t-small);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.ca-step__marker svg { display: block; width: 18px; height: 18px; }
-
-/* NOT-YET-DONE vs FAILED — the distinction the strip exists to make.
-   pending: hollow, neutral, keeps its NUMBER; nothing has been decided.
-   fail:    filled tint, fail ink, the number replaced by a cross glyph.
-   Shape and glyph carry it, not colour. */
-.ca-step[data-ca-state="pending"] .ca-step__marker {
-  background: var(--ca-surface);
-  border-color: var(--ca-rule-2);
-  color: var(--ca-ink-3);
-}
-.ca-step[data-ca-state="pass"] .ca-step__marker { border-color: var(--ca-pass-ink); }
-.ca-step[data-ca-state="fail"] .ca-step__marker { border-color: var(--ca-fail-ink); }
-
-.ca-step__body {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--ca-s-2);
-  padding-right: var(--ca-s-5);
-  min-width: 0;
-  font-size: var(--ca-t-small);
-  line-height: 1.55;
-  color: var(--ca-ink-2);
-}
-.ca-step__body p { font-size: var(--ca-t-small); max-width: 42ch; }
-.ca-step__title {
-  font-family: var(--ca-font-serif);
-  font-size: var(--ca-t-h3);
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--ca-ink);
-  margin: 0;
-}
-/* The step-3 headline is a recommendation banner nested in the strip: let it
-   sit flush rather than becoming a card inside a card. */
-.ca-step__body .ca-rec { padding: var(--ca-s-3) var(--ca-s-4); width: 100%; }
-.ca-step__body .ca-rec__decision { font-size: var(--ca-t-h3); }
+   8. (WITHDRAWN) THE THREE-STEP STRIP
+   REVISION_CONTRACT §E.9. .ca-steps / .ca-step / .ca-step__rail /
+   .ca-step__marker / .ca-step__title / .ca-step__body / .ca-step__note are
+   deleted with the strip itself (§E.1 #1, §E.5 #38). The three checks are
+   restated in one place only, as three lines inside a closed disclosure on
+   the Documentation tab (§G.7.2 panel 1), which needs no component of its own.
+   ===========================================================================*/
 
 /* ===========================================================================
    9. SUMMARY STAT ROW (§F.18) — six numbers, ONE object
@@ -1134,7 +1052,7 @@ bslib-input-dark-mode {
 }
 
 /* ===========================================================================
-   11. CALLOUTS, READING LIST, KEYS AND BANNERS
+   11. CALLOUTS, READING LIST AND BANNERS
    .ca-note is built by ca_note(variant, title, body) (§F.10). The glyph column
    is drawn in CSS, so the helper needs no icon of its own; if it supplies one,
    it lands in the glyph column instead.
@@ -1218,71 +1136,15 @@ bslib-input-dark-mode {
 .ca-note--interpret { font-size: var(--ca-t-body); }
 .ca-note--interpret .ca-note__title { font-size: var(--ca-t-h3); font-family: var(--ca-font-serif); }
 
-/* The numbered reading protocol. The numbering is real: it is the order you
-   look at the curve in. Hanging indent, not a grid — the items hold mixed
-   inline content and a grid would turn every inline run into its own row. */
-.ca-read {
-  list-style: none;
-  counter-reset: ca-read;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--ca-s-4);
-}
-.ca-read__item,
-.ca-read > li {
-  counter-increment: ca-read;
-  position: relative;
-  padding-left: calc(24px + var(--ca-s-3));
-  min-height: 24px;
-  margin: 0;
-}
-.ca-read__item::before,
-.ca-read > li::before {
-  content: counter(ca-read);
-  position: absolute;
-  left: 0; top: 1px;
-  display: grid;
-  place-items: center;
-  width: 24px; height: 24px;
-  border-radius: var(--ca-r-1);
-  background: var(--ca-petrol-100);
-  color: var(--ca-primary);
-  font-family: var(--ca-font-mono);
-  font-size: var(--ca-t-micro);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.ca-read b, .ca-read strong { color: var(--ca-ink); font-weight: 650; }
-.ca-read em { color: var(--ca-ink-3); font-style: italic; }
-.ca-read p + p { margin-top: var(--ca-s-2); }
+/* The numbered reading list (.ca-read and its counter plates) is DELETED.
+   The Qualitative tab's two lists are plain bullets now - they are parallel
+   observations, not a numbered sequence of steps - so they take the
+   stylesheet's own `ul` rule and no file in the repo references .ca-read. */
 
-/* A legend key, so prose can name a mark on the plot without colouring the
-   text. Recolour or reshape it per instance with inline custom properties:
-     style = "--ca-key-colour: var(--ca-series-2)"                             */
-/* INTEGRATOR: this was `white-space: nowrap`, which is right for the one-word
-   swatch label on the Data tab but wrong for the two places that use .ca-key
-   on a whole paragraph (the J.1 conjunction line, the Conclusion tally). A
-   2179px unbreakable line inside a 728px column pushed document.scrollWidth to
-   2560 and made the whole app scroll sideways on the Qualitative tab. The key
-   now wraps; the swatch stays on the first line and never shrinks. */
-.ca-key {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  white-space: normal;
-  max-width: 100%;
-}
-.ca-key::before {
-  content: "";
-  position: relative;
-  top: -0.32em;
-  flex: 0 0 auto;
-  width: 16px; height: 2px;
-  border-radius: 1px;
-  background: var(--ca-key-colour, var(--ca-series-1));
-}
+/* REVISION_CONTRACT §E.9: .ca-key and its three swatch variants are deleted
+   with the plot legends and the k-of-m tally they served (§E.2 #8, §E.5 #40).
+   The Qualitative tab's plot now carries the shaded band and nothing else, so
+   there is no mark left for prose to name. */
 
 /* The always-visible banner over an overridden or explored result (§F.19). */
 .ca-banner {
@@ -1413,6 +1275,204 @@ bslib-input-dark-mode {
 }
 .ca-plot--sm { padding: var(--ca-s-2); }
 .ca-plot--sm img { max-height: 240px; width: auto; max-width: 100%; margin-inline: auto; }
+
+/* ===========================================================================
+   13b. STATIC FIGURES  (REVISION_CONTRACT §D.4, §H)
+
+   Three shipped images: the poster flowchart and the mixture-cure-model
+   equation on Intro, and the QR code on Documentation. Markup:
+
+     <figure class="ca-figure">
+       <img class="ca-figure__img" src="img/…" alt="…">
+       <figcaption class="ca-figure__cap">Cure-model appropriateness</figcaption>
+     </figure>
+
+   DARK MODE. Both PNGs were cut from the poster and carry a white ground, so
+   on a dark page they would float as a bright rectangle with a hard edge
+   (§I.3 calls that a regression). The fix is here, not a new asset, and it is
+   NOT a filter: inverting or dimming a flowchart whose red exits and green
+   outcome carry meaning would wreck it. Instead the image sits on a light
+   plate in BOTH modes, so it reads as a printed figure on paper either way —
+   the same treatment, one rule, nothing mode-specific about the image itself.
+   =========================================================================== */
+.ca-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ca-s-3);
+  margin: 0;
+  padding: var(--ca-s-4);
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-3);
+  min-width: 0;
+}
+.ca-figure__img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 460px;
+  height: auto;
+  /* the light plate: the image keeps its own colours on its own paper */
+  padding: var(--ca-s-3);
+  background: #FBFCFC;
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-2);
+}
+.ca-figure__cap {
+  font-family: var(--ca-font-serif);
+  font-size: var(--ca-t-small);
+  line-height: 1.5;
+  color: var(--ca-ink-2);
+  text-align: center;
+  text-wrap: balance;
+  max-width: 56ch;
+}
+
+/* The Documentation QR block: the code beside its two lines of small print,
+   and it stacks under 560px rather than shrinking the code below scannable.
+     <div class="ca-qr"><a …><img class="ca-qr__img" …></a><div>…two lines…</div></div> */
+.ca-qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ca-s-4);
+  padding: var(--ca-s-4);
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-3);
+  font-size: var(--ca-t-small);
+  line-height: 1.55;
+  color: var(--ca-ink-2);
+  min-width: 0;
+}
+.ca-qr > :not(.ca-qr__img):not(a) { flex: 1 1 22ch; min-width: 0; }
+.ca-qr p { margin: 0; }
+.ca-qr p + p { margin-top: var(--ca-s-2); }
+.ca-qr a { display: block; flex: none; line-height: 0; border-radius: var(--ca-r-2); }
+/* An SVG QR is black on transparent, so it disappears on a dark ground. Same
+   answer as the figures: give it white paper, in both modes. */
+.ca-qr__img {
+  display: block;
+  width: 116px; height: 116px;
+  padding: var(--ca-s-2);
+  background: #FFFFFF;
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-2);
+}
+
+/* ===========================================================================
+   13c. THE EXPERT-JUDGMENT QUESTION ROWS  (REVISION_CONTRACT §D.4, §G.2)
+
+     <div class="ca-choice">
+       <div class="ca-choice__row">
+         <p class="ca-choice__q">Is a cure biologically plausible?</p>
+         …radioButtons, Yes / No, nothing pre-selected…
+       </div>
+       …second row…
+     </div>
+
+   The question IS the radio group's own <label>, so it stays associated with
+   the group for screen readers — which is why nothing here hides a label. The
+   question sits left and the two options right on a wide window; they stack on
+   a narrow one. Nothing styles an answered row differently from an unanswered
+   one: an unanswered question must look unanswered, and the outcome line
+   inside its own .ca-choice panel is what reports the state.
+
+   .ca-choice is also the panel the outcome chip, its one line and its forward
+   button sit in, so it is a plain column with a gap, not a question-only box.
+   =========================================================================== */
+.ca-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ca-s-3);
+  padding: var(--ca-s-4) var(--ca-s-5);
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-rule);
+  border-radius: var(--ca-r-3);
+  min-width: 0;
+}
+.ca-choice > p {
+  margin: 0;
+  font-size: var(--ca-t-lede);
+  line-height: 1.5;
+  color: var(--ca-ink-2);
+  max-width: 60ch;
+}
+.ca-choice__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ca-s-2) var(--ca-s-5);
+  width: 100%;
+  min-width: 0;
+}
+/* The radio group carries the whole row: its label on the left, its options on
+   the right, and no stray Shiny bottom margin. */
+.ca-choice__row .shiny-input-radiogroup,
+.ca-choice__row .shiny-input-container,
+.ca-choice__row .form-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ca-s-2) var(--ca-s-5);
+  width: 100%;
+  margin-bottom: 0;
+  min-width: 0;
+}
+.ca-choice__row .control-label { flex: 1 1 26ch; margin: 0; min-width: 0; }
+/* The question text lives in a <span> inside .control-label, which §14 sets in
+   uppercase micro type for ordinary field labels. A question is not a field
+   label: it opts out of the transform and takes reading-size type. */
+.ca-choice__q {
+  display: block;
+  font-size: var(--ca-t-lede);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ca-ink);
+  text-transform: none;
+  letter-spacing: normal;
+  text-wrap: pretty;
+}
+.ca-choice__row .shiny-options-group {
+  display: flex;
+  flex-direction: row;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--ca-s-4);
+  margin: 0;
+}
+/* Bootstrap 5 draws a form-check with a 1.5em padding and a floated input
+   pulled back into it by a negative margin. Laying the row out as flex is the
+   one change that works for that markup AND for the older nested-input form,
+   so the radio and its word stay together either way. */
+.ca-choice__row .radio,
+.ca-choice__row .radio-inline,
+.ca-choice__row .form-check,
+.ca-choice__row .form-check-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--ca-s-2);
+  margin: 0;
+  padding-left: 0;
+  min-height: 0;
+}
+.ca-choice__row .form-check-input,
+.ca-choice__row input[type="radio"] { float: none; margin: 0; flex: none; }
+.ca-choice__row .shiny-options-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ca-s-2);
+  margin: 0;
+  font-size: var(--ca-t-body);
+  color: var(--ca-ink);
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+  cursor: pointer;
+}
 
 /* ===========================================================================
    14. BOOTSTRAP AND SHINY CONTROLS
@@ -1848,7 +1908,9 @@ table.dataTable thead > tr > th.sorting_desc::after {
    <768px  : the rail becomes a horizontal bar that scrolls sideways
    =========================================================================== */
 @media (max-width: 1199.98px) {
-  :root { --ca-rail-w: 232px; }
+  /* 252px, not 232px: the label column has to hold "Recommendation" on one
+     line at body size (REVISION_CONTRACT §B.1). */
+  :root { --ca-rail-w: 252px; }
   .ca-statrow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ca-statrow__cell:nth-child(4) { border-left: 0; }
   .ca-statrow__cell:nth-child(n + 4) { border-top: 1px solid var(--ca-rule); }
@@ -1859,7 +1921,6 @@ table.dataTable thead > tr > th.sorting_desc::after {
     gap: var(--ca-s-4);
   }
   .ca-rail { padding: var(--ca-s-3) var(--ca-s-2); align-items: center; }
-  .ca-rail__eyebrow { display: none; }            /* compat class, see §18   */
   .ca-rail__link {
     grid-template-columns: 26px;
     grid-template-areas: "num" "glyph" "state";
@@ -1897,6 +1958,8 @@ table.dataTable thead > tr > th.sorting_desc::after {
     flex-direction: row;
     padding: var(--ca-s-2);
     border-radius: var(--ca-r-2);
+    max-height: none;                /* the vertical cap is for the sticky rail */
+    overflow-y: visible;
     overflow-x: auto;
     scrollbar-width: thin;
   }
@@ -1925,18 +1988,6 @@ table.dataTable thead > tr > th.sorting_desc::after {
     translate: 0 -50%;
     width: var(--ca-s-1); height: 2px;
   }
-  .ca-steps { grid-template-columns: minmax(0, 1fr); padding: var(--ca-s-4); }
-  .ca-step { flex-direction: row; gap: var(--ca-s-3); align-items: stretch; }
-  .ca-step__rail { flex-direction: column; align-items: center; }
-  .ca-step:not(:last-child) .ca-step__rail::after {
-    flex: 1 1 auto;
-    width: 2px; height: auto;
-    min-height: var(--ca-s-5);
-    margin-left: 0;
-    margin-top: var(--ca-s-1);
-  }
-  .ca-step__body { padding-right: 0; padding-bottom: var(--ca-s-5); }
-  .ca-step:last-child .ca-step__body { padding-bottom: 0; }
   .ca-statrow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ca-statrow__cell {
     border-left: 0;
@@ -1952,6 +2003,16 @@ table.dataTable thead > tr > th.sorting_desc::after {
   .ca-hero > h1, .ca-hero > h2 { font-size: 1.9rem; }
   .ca-note { padding: var(--ca-s-3); }
   .ca-sens { padding: var(--ca-s-3); }
+  /* Figures, QR and question rows on a phone (§13b, §13c). The flowchart is
+     tall and narrow, so it keeps its width and loses the height cap; the
+     question rows stack, question over radios. */
+  .ca-figure { padding: var(--ca-s-3); }
+  .ca-figure__img { max-height: none; padding: var(--ca-s-2); }
+  .ca-qr { padding: var(--ca-s-3); }
+  .ca-choice { padding: var(--ca-s-3) var(--ca-s-4); }
+  .ca-choice__row .shiny-input-radiogroup,
+  .ca-choice__row .shiny-input-container,
+  .ca-choice__row .form-group { flex-direction: column; align-items: flex-start; }
   .dataTables_wrapper .dataTables_filter { text-align: left; }
   .dataTables_wrapper .dataTables_filter label { justify-content: flex-start; }
   bslib-input-dark-mode { top: auto; bottom: var(--ca-s-3); right: var(--ca-s-3); }
@@ -1961,7 +2022,7 @@ table.dataTable thead > tr > th.sorting_desc::after {
    every glyph, because there the glyph is the only channel left. */
 @media (forced-colors: active) {
   .ca-chip, .ca-card, .ca-rec, .ca-note, .ca-banner,
-  .ca-step__marker, .ca-empty, .ca-sens { border: 1px solid CanvasText; }
+  .ca-choice, .ca-figure, .ca-qr, .ca-empty, .ca-sens { border: 1px solid CanvasText; }
   .ca-rail__link[aria-current="page"] { outline: 2px solid Highlight; }
   .ca-rail__num { border: 1px solid CanvasText; }
 }
@@ -1972,27 +2033,15 @@ table.dataTable thead > tr > th.sorting_desc::after {
    kept only so that markup written against it still renders coherently. New
    code must use the §G names above; nothing here introduces a new treatment.
    --------------------------------------------------------------------------- */
-.ca-eyebrow {
-  font-size: var(--ca-t-micro);
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--ca-ink-3);
-  margin: 0;
-}
-.ca-rail__eyebrow { padding-inline: var(--ca-s-2); }
 .ca-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
          overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.ca-figure { font-variant-numeric: proportional-nums; }
 .ca-num { font-variant-numeric: tabular-nums; }
 .ca-scroll-x { overflow-x: auto; }
 .ca-chip--wrap { white-space: normal; }
 .ca-stat__unit { font-size: var(--ca-t-small); color: var(--ca-ink-3); }
 .ca-statrow__foot { font-size: var(--ca-t-micro); color: var(--ca-ink-3); line-height: 1.4; }
 .ca-statrow__unit { font-size: 0.55em; font-weight: 500; color: var(--ca-ink-3); margin-left: 2px; }
-.ca-step__note { font-size: var(--ca-t-small); color: var(--ca-ink-2); line-height: 1.5; }
 .ca-rec__body { display: flex; flex-direction: column; gap: var(--ca-s-2); min-width: 0; }
-.ca-rec__glyph { display: none; }
 .ca-rec__plain { font-size: var(--ca-t-lede); color: var(--ca-ink-2); line-height: 1.5; }
 .ca-rec__verbatim {
   padding: var(--ca-s-3);
@@ -2002,41 +2051,13 @@ table.dataTable thead > tr > th.sorting_desc::after {
   line-height: 1.6;
   color: var(--ca-ink-2);
 }
-.ca-rec__condition {
-  display: flex; align-items: center; gap: var(--ca-s-2);
-  font-size: var(--ca-t-small);
-  color: var(--ca-state-ink, var(--ca-ink-2));
-}
-.ca-rec__condition svg { display: block; width: 15px; height: 15px; flex: none; }
-.ca-key--band::before {
-  height: 11px; border-radius: 2px; background: var(--ca-band);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ca-series-1) 45%, transparent);
-}
-.ca-key--dashed::before {
-  background: repeating-linear-gradient(90deg,
-    var(--ca-key-colour, var(--ca-series-2)) 0 5px, transparent 5px 8px);
-}
-.ca-key--tail::before {
-  height: 12px; border-radius: 2px; background: var(--ca-tail-fill);
-  box-shadow: inset 0 0 0 1px var(--ca-tail-rule);
-}
 .ca-empty__title { font-family: var(--ca-font-serif); font-size: var(--ca-t-h3); color: var(--ca-ink); }
 .ca-cell-error { color: var(--ca-fail-ink); font-size: var(--ca-t-small); }
 .ca-cell-na { color: var(--ca-ink-3); }
-.ca-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--ca-font-mono); font-size: var(--ca-t-micro);
-  padding: 2px 6px; border-radius: var(--ca-r-1);
-  border: 1px solid var(--ca-rule-2); color: var(--ca-ink-2);
-  background: var(--ca-surface-2);
-}
-.ca-badge--cure { border-color: var(--ca-neutral-line); background: var(--ca-neutral-bg); color: var(--ca-neutral-ink); }
 
-/* FIXPASS: the Data step's KM reading guide is collapsed and held to a
-   readable measure; the plot beside it now spans the full content width. */
-.ca-km-guide { margin-top: var(--ca-space-4, 1rem); }
-.ca-km-guide .accordion-body { max-width: 78ch; }
-.ca-km-guide .accordion-button { font-weight: 600; }
+/* REVISION_CONTRACT §E.9: .ca-badge / .ca-badge--cure and .ca-km-guide are
+   deleted. Neither has a consumer left in the app: the Data tab's KM reading
+   guide is gone (§E.2 #9) and the report carries its own inlined CSS. */
 
 /* FIXPASS: reset links guarded by an aria-disabled handler looked live.
    Give anchors the same disabled treatment buttons already get. */
@@ -2047,3 +2068,502 @@ a[aria-disabled="true"],
   cursor: default;
   text-decoration: none;
 }
+
+/* ===========================================================================
+   19. V2_CONTRACT §E.1 — TYPESET MATHEMATICS
+   Appended as a new section. NO RULE ABOVE THIS LINE IS CHANGED.
+   Every colour is a var(--ca-*, fallback) and every token it names is declared
+   in §1 and re-stepped in §1b, so the whole block tracks the dark ramp with no
+   dark-mode rule of its own. The two accents draw in currentColor, so they
+   follow whatever ink their context resolves to.
+   =========================================================================== */
+/* ---------------------------------------------------------------------------
+   N. TYPESET MATHEMATICS — Documentation only.
+   No MathJax, no KaTeX, no webfont, no network. HTML + unicode + CSS; renders
+   identically offline.
+
+   The accent trick: a hat or bar is NOT a combining codepoint (U+0302 renders
+   unreliably across the serif fallbacks). It is an absolutely positioned
+   pseudo-element centred over an inline-block glyph, so it lands on the
+   glyph's optical centre in every font in the stack.
+
+   Never put a formula in .ca-code / <code>. Math is .ca-m or .ca-eq.
+   --------------------------------------------------------------------------- */
+
+.ca-m,
+.ca-eq {
+  font-family: var(--ca-font-serif, Charter, Cambria, Georgia, serif);
+  font-feature-settings: "lnum" 1, "tnum" 1;
+  color: var(--ca-ink, #11191C);
+  white-space: nowrap;
+}
+
+/* inline math sits inside running prose */
+.ca-m { font-size: 1.03em; }
+
+/* display math: one equation, on its own line, centred, breathing room */
+.ca-eq {
+  display: block;
+  white-space: normal;
+  text-align: center;
+  font-size: 1.12em;
+  line-height: 1.9;
+  margin: 1.15rem 0;
+}
+
+/* variables are italic; function names, numerals and operators are upright */
+.ca-m i, .ca-eq i { font-style: italic; }
+.ca-m .up, .ca-eq .up { font-style: normal; }
+
+/* binary operators and relations get real space; unary signs get none */
+.ca-m .op, .ca-eq .op {
+  font-style: normal;
+  margin: 0 0.26em;
+  color: var(--ca-ink-2, #414D52);
+}
+.ca-m .opt, .ca-eq .opt {       /* tight: fraction slashes, commas */
+  font-style: normal;
+  margin: 0 0.08em;
+}
+
+/* real sub/superscripts that do not disturb the line box */
+.ca-m sub, .ca-eq sub,
+.ca-m sup, .ca-eq sup {
+  font-size: 0.68em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+  font-style: italic;
+}
+.ca-m sub, .ca-eq sub { top:  0.30em; }
+.ca-m sup, .ca-eq sup { top: -0.52em; }
+.ca-m sub.up, .ca-eq sub.up,
+.ca-m sup.up, .ca-eq sup.up { font-style: normal; }
+
+/* hat accent: π̂, θ̂, r̂ */
+.ca-hat {
+  position: relative;
+  display: inline-block;
+  padding-top: 0.06em;
+}
+.ca-hat::after {
+  content: "\02C6";                 /* MODIFIER LETTER CIRCUMFLEX */
+  position: absolute;
+  left: 50%;
+  top: -0.58em;
+  transform: translateX(-50%);
+  font-size: 0.96em;
+  line-height: 1;
+  font-style: normal;
+  pointer-events: none;
+}
+/* italic glyphs lean, so the hat must lean with them */
+.ca-hat.it { font-style: italic; }
+.ca-hat.it::after { left: 56%; }
+
+/* bar accent */
+.ca-bar {
+  position: relative;
+  display: inline-block;
+  padding-top: 0.08em;
+}
+.ca-bar::after {
+  content: "";
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: -0.05em;
+  border-top: 1px solid currentColor;
+  pointer-events: none;
+}
+
+/* a built-up fraction, for r only — everything else stays on one line */
+.ca-frac {
+  display: inline-block;
+  vertical-align: -0.62em;
+  text-align: center;
+  margin: 0 0.18em;
+}
+.ca-frac > span { display: block; padding: 0 0.35em; }
+.ca-frac > span:first-child { border-bottom: 1px solid currentColor; padding-bottom: 0.12em; }
+.ca-frac > span:last-child  { padding-top: 0.12em; }
+
+/* intervals keep their brackets upright */
+.ca-m .br, .ca-eq .br { font-style: normal; }
+
+/* ---- Documentation: lead paragraph + closed disclosure -------------------- */
+
+.ca-method { margin: 0 0 1.5rem; }
+.ca-method > h3 {
+  font-family: var(--ca-font-serif, Charter, Cambria, Georgia, serif);
+  font-size: var(--ca-t-h3, 1.0625rem);
+  color: var(--ca-ink, #11191C);
+  margin: 0 0 0.35rem;
+}
+.ca-method__lead {
+  color: var(--ca-ink-2, #414D52);
+  margin: 0 0 0.6rem;
+  max-width: 68ch;
+}
+
+.ca-more { border-top: 1px solid var(--ca-rule, #DBE2E4); }
+.ca-more > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.5rem 0;
+  font-size: 0.875rem;
+  color: var(--ca-petrol-600, #0A5670);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.ca-more > summary::-webkit-details-marker { display: none; }
+.ca-more > summary::before {
+  content: "";
+  width: 0; height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 140ms ease;
+}
+.ca-more[open] > summary::before { transform: rotate(90deg); }
+.ca-more > summary:focus-visible {
+  outline: 2px solid var(--ca-petrol-500, #00739B);
+  outline-offset: 2px;
+}
+
+.ca-more__body {
+  background: var(--ca-surface-3, #E7ECEE);
+  border-radius: 6px;
+  padding: 0.9rem 1.05rem 0.3rem;
+  margin: 0 0 0.9rem;
+  overflow-x: auto;                 /* long equations scroll, page never does */
+}
+
+.ca-def { margin: 0; }
+.ca-def > dt {
+  font-family: var(--ca-font-serif, Charter, Cambria, Georgia, serif);
+  font-style: italic;
+  color: var(--ca-ink, #11191C);
+  margin-top: 0.75rem;
+}
+.ca-def > dt:first-child { margin-top: 0; }
+.ca-def > dd {
+  margin: 0.15rem 0 0;
+  color: var(--ca-ink-2, #414D52);
+  max-width: 72ch;
+}
+.ca-def > dd + dd { margin-top: 0.3rem; }
+
+/* symbol table inside a disclosure */
+.ca-syms { margin: 0.35rem 0 0; }
+.ca-syms > div {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.35rem 0.75rem;
+  padding: 0.2rem 0;
+  align-items: baseline;
+}
+.ca-syms > div > :first-child { text-align: right; }
+
+@media (max-width: 40rem) {
+  .ca-syms > div { grid-template-columns: 1fr; }
+  .ca-syms > div > :first-child { text-align: left; }
+}
+
+/* ===========================================================================
+   20. RECALCULATION — V2_CONTRACT §B.5
+   The Run and Prepare buttons are gone (R2), so the app computes on its own as
+   the user moves around. A full assessment measures 0.1-0.2 s, which reads as a
+   blink — but the blink still has to be visible, and a rare slow one must not
+   look frozen.
+
+   WHAT THIS IS NOT: no modal, no page-wide grey-out, no spinner library (waiter
+   is forbidden), no skeleton. No number is ever shown mid-flight — an output is
+   either its previous value at 45% opacity or the new one.
+
+   Shiny stamps .recalculating on an output while it recomputes; §2 already
+   dims it. The two additions here are pointer-events, so a control cannot be
+   clicked against a value that is about to change, and one 2px indeterminate
+   rule along the top edge of the card doing the work.
+   =========================================================================== */
+.shiny-bound-output.recalculating,
+.ca-recalc {
+  pointer-events: none;
+}
+
+/* The rule rides on the card, not on the output, so it spans the whole block
+   rather than the width of one number. Put .ca-recalc on the card wrapper.
+   The explicit-class rules come FIRST and stand alone: a browser that does not
+   know :has() drops the whole of any rule whose selector list contains it, so
+   mixing the two spellings in one list would take the explicit one down with
+   the progressive enhancement below. */
+.ca-recalc { position: relative; }
+.ca-recalc::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  border-radius: var(--ca-r-3) var(--ca-r-3) 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ca-petrol-400) 35%,
+    var(--ca-petrol-400) 65%,
+    transparent 100%);
+  background-size: 42% 100%;
+  background-repeat: no-repeat;
+  animation: ca-indeterminate 1100ms var(--ca-ease) infinite;
+  pointer-events: none;
+}
+@keyframes ca-indeterminate {
+  0%   { background-position: -45% 0; }
+  100% { background-position: 145% 0; }
+}
+
+/* Progressive enhancement: a card whose own output is recomputing gets the
+   same rule without the module author having to add a class. Dropped whole on
+   a browser with no :has(); the opacity dim of §2 still carries the state. */
+.ca-card:has(.shiny-bound-output.recalculating) { position: relative; }
+.ca-card:has(.shiny-bound-output.recalculating)::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  border-radius: var(--ca-r-3) var(--ca-r-3) 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ca-petrol-400) 35%,
+    var(--ca-petrol-400) 65%,
+    transparent 100%);
+  background-size: 42% 100%;
+  background-repeat: no-repeat;
+  animation: ca-indeterminate 1100ms var(--ca-ease) infinite;
+  pointer-events: none;
+}
+
+/* §16: motion is a courtesy, never the only channel. With motion reduced the
+   rule stays put and stays visible — the opacity change still carries it.
+   Split for the same :has() reason as above. */
+@media (prefers-reduced-motion: reduce) {
+  .ca-recalc::before { animation: none; background: var(--ca-petrol-400); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ca-card:has(.shiny-bound-output.recalculating)::before {
+    animation: none;
+    background: var(--ca-petrol-400);
+  }
+}
+
+/* ===========================================================================
+   21. THE FOLLOW-UP TIMELINE — V2_CONTRACT §F.4, ca_viz_timeline()
+   One 44px bar: time zero to the last event, then the last event to the end of
+   follow-up. The second segment is the window the follow-up readings key on.
+
+   NEUTRAL, NEVER AMBER OR RED. The tail means "unresolved", not "bad", and
+   colouring it as a warning would editorialise a descriptive fact. It uses the
+   same --ca-tail-* pair the Kaplan-Meier figure paints its tail band with, so
+   the chart and the bar say the same thing in the same colour.
+   =========================================================================== */
+.ca-timeline { margin: 0 0 var(--ca-s-4); }
+
+.ca-timeline__track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  border-radius: var(--ca-r-2);
+  overflow: hidden;
+  background: var(--ca-surface-2);
+}
+.ca-timeline__seg { height: 100%; }
+.ca-timeline__seg--observed { background: var(--ca-petrol-200); }
+.ca-timeline__seg--tail {
+  background: var(--ca-tail-fill);
+  border-left: 1px solid var(--ca-tail-rule);
+}
+/* the S6 case: no second segment exists, so the chip stands in for it */
+.ca-timeline__inline-chip {
+  position: absolute;
+  right: var(--ca-s-2);
+  top: 50%;
+  translate: 0 -50%;
+}
+
+.ca-timeline__axis {
+  position: relative;
+  height: 2.1rem;
+  margin-top: 2px;
+}
+.ca-timeline__tick {
+  position: absolute;
+  top: 0;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.ca-timeline__tick--start { translate: 0 0; align-items: flex-start; }
+.ca-timeline__tick--end   { translate: -100% 0; align-items: flex-end; }
+.ca-timeline__tick-rule {
+  width: 1px;
+  height: 5px;
+  background: var(--ca-rule-2);
+}
+.ca-timeline__tick-label {
+  font-size: var(--ca-t-micro);
+  color: var(--ca-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ca-timeline__caption {
+  margin: var(--ca-s-1) 0 0;
+  font-size: var(--ca-t-small);
+  color: var(--ca-ink-3);
+  line-height: 1.5;
+}
+.ca-timeline__void {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* ===========================================================================
+   22. THE THRESHOLD TRACK — V2_CONTRACT §F.4, ca_viz_threshold_track()
+   One scale, the threshold as a tick, the reading as an 8px dot, the good side
+   tinted. Direction is not the same for the two readings that use this (S8), so
+   which side is tinted is set by the builder, never assumed here.
+
+   TWO TRACKS, NEVER THREE (S9). Maller-Zhou and qn are the same test; the
+   second one rides as .ca-track__companion, a sentence, not a third bar.
+
+   data-ca-met carries pass/fail through §1c's inherited state tokens, so the
+   dot, the tinted side and the label all resolve from one attribute.
+   =========================================================================== */
+.ca-track { margin: 0 0 var(--ca-s-4); }
+
+.ca-track__title {
+  font-size: var(--ca-t-body);
+  color: var(--ca-ink);
+  margin: 0 0 var(--ca-s-2);
+}
+
+.ca-track__bar {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--ca-surface-2);
+  border: 1px solid var(--ca-rule);
+  overflow: hidden;
+}
+.ca-track__good {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--ca-pass-bg);
+}
+.ca-track__thr {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  translate: -1px 0;
+  background: var(--ca-ink-3);
+}
+.ca-track__dot {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  translate: -50% -50%;
+  background: var(--ca-state-ink, var(--ca-ink));
+  box-shadow: 0 0 0 2px var(--ca-surface);
+}
+
+.ca-track__labels {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ca-s-3);
+  margin-top: var(--ca-s-1);
+  font-size: var(--ca-t-small);
+}
+.ca-track__stat {
+  color: var(--ca-state-ink, var(--ca-ink));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ca-track__thr-label { color: var(--ca-ink-3); }
+.ca-track__thr-label .ca-num { font-variant-numeric: tabular-nums; }
+
+.ca-track__companion {
+  margin: var(--ca-s-2) 0 0;
+  font-size: var(--ca-t-small);
+  color: var(--ca-ink-3);
+  line-height: 1.5;
+  max-width: var(--ca-measure);
+}
+
+/* "cannot be computed" is grey, never a red fail (§F.8) */
+.ca-track__void {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ca-s-2) var(--ca-s-3);
+  padding: var(--ca-s-3);
+  background: var(--ca-void-bg);
+  border: 1px solid var(--ca-void-line);
+  border-radius: var(--ca-r-2);
+}
+.ca-track__void-text {
+  margin: 0;
+  font-size: var(--ca-t-small);
+  color: var(--ca-void-ink);
+}
+
+@media (forced-colors: active) {
+  .ca-track__bar, .ca-track__void, .ca-timeline__track { border: 1px solid CanvasText; }
+  .ca-track__dot { background: CanvasText; }
+}
+
+/* ===========================================================================
+   23. §E.1 ACCENT METRICS — a correction, not an edit.
+   §19 above is V2_CONTRACT §E.1 pasted verbatim and is left byte-for-byte
+   alone. This block sits after it and overrides four declarations, because the
+   pasted metrics do not land where §E.1's own comment says they should ("it
+   lands on the glyph's optical centre"). Measured in the browser, at 17px body
+   and at both --ca-eq line heights.
+
+   WHY THEY WERE OUT. `.ca-hat` and `.ca-bar` are inline-blocks with no
+   line-height of their own, so each one inherits the surrounding line-height —
+   1.55 in running prose, 1.9 inside .ca-eq. The box is therefore ~half an em
+   TALLER than the glyph it wraps, and top: -0.58em is measured from the top of
+   that oversized box rather than from the glyph. The hat floated a clear
+   x-height above the letter and the offset drifted between prose and display
+   math, which is the one thing a fixed offset was supposed to prevent.
+
+   THE FIX is one declaration plus three adjusted offsets:
+     line-height: 1   makes the box hug the glyph, so the offset is measured
+                      from the glyph in every context and stops drifting;
+     top: -0.30em     hat, measured: sits just clear of cap height;
+     font-size: 1em   U+02C6 at 0.96em read light against a 1em letter;
+     top: -0.12em     bar, the same measurement for the overline.
+   The horizontal nudge for italic glyphs is kept and widened by one point,
+   which is what centres the hat over the lean of an italic pi.
+
+   Everything else in §E.1 — the colours, the currentColor accents, the
+   sub/sup metrics, the operator spacing, the fraction — is untouched and
+   renders correctly in both modes.
+   =========================================================================== */
+.ca-hat,
+.ca-bar { line-height: 1; }
+
+.ca-hat::after {
+  top: -0.30em;
+  font-size: 1em;
+}
+.ca-hat.it::after { left: 57%; }
+
+.ca-bar::after { top: -0.12em; }

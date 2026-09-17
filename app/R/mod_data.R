@@ -1,21 +1,48 @@
 # ---------------------------------------------------------------------------
-# mod_data.R — the Data tab (builder-tabs-a)
+# mod_data.R — the Data tab (rewriter-data)
 #
 # Owns the only two package calls that turn a file into an analysable frame:
-# contract I.1 (prepare.surv.data) and I.2 (model.fitting, plot_km = TRUE).
-# The 0/1 recode (rule R3) happens app-side, in ca_clean_surv(), BEFORE either
-# of those runs.
+# BUILD_CONTRACT I.1 (prepare.surv.data) and I.2 (model.fitting, plot_km =
+# TRUE). The 0/1 recode (rule R3) happens app-side, in ca_clean_surv(), BEFORE
+# either of those runs, and time is scaled exactly once, inside I.1.
 #
-# Every statistical sentence on this screen is pasted verbatim from contract
-# section J (J.1 the reading guide, J.2 the plateau callout, J.10 the error
-# wording). Nothing statistical is written by the builder.
+# REVISION_CONTRACT v2.0 §E.2 stripped this screen to the data summary and the
+# preview table. Deleted here this pass: the annotated Kaplan-Meier card and
+# every figure (#6), .data_annotate_km() (#7), the plot legend (#8), the "How to
+# read this curve" accordion (#9), the plateau callout (#10), the zero-width
+# tail warning (#11), the "Work through the curve" button (#12), all four
+# main-panel Prepare buttons and the message-builder action arguments that
+# emitted them (#13), the page lede (#14) and the two card ledes (#15, #16).
+# Visual assessment now lives entirely on the Qualitative tab.
 #
-# Private helpers carry the `.data_` prefix per contract section F.
+# V2_CONTRACT §B deletes the last button on this screen. The sidebar is now
+# source radio, built-in select, file input, the four mapping controls and the
+# two small-print hints — and nothing else. Preparation is automatic: the
+# 5-tuple (source/upload, time, status, event level, time scale) is debounced by
+# 600 ms and prepares itself, so no keystroke through the mapping controls costs
+# a fit and nothing on any tab is ever stale (§B.1 reactives 1 and 3, §B.6).
+#
+# FIELD PROVENANCE (REVISION_CONTRACT G2 — kept in code, never on screen):
+#   * state$prepared  <- cureAssess::prepare.surv.data() return    (I.1)
+#   * state$fit       <- cureAssess::model.fitting() return, incl. $kmplot,
+#                        which the Qualitative tab draws              (I.2)
+#   * state$dropped   <- ca_clean_surv()$dropped, app-side counts only
+#   The six numbers in the summary card are ca_data_summary(prepared)
+#   (helpers.R F.1) — descriptive counts, the only app-side computation this
+#   file performs. No inferential statistic is computed or read here. The
+#   tail-level read that used to sit in this file (the old tail_level() reactive
+#   and the KM annotation) is gone: per REVISION_CONTRACT §F, mod_qualitative.R
+#   is now the only file permitted to read that package object at all.
+#
+# Every visible sentence is pasted from REVISION_CONTRACT §G.3 or §G.9. Nothing
+# statistical is written here.
+#
+# Private helpers carry the `.data_` prefix.
 # ---------------------------------------------------------------------------
 
 
 # ===========================================================================
-# 1. PRIVATE HELPERS — parsing, column inspection, plot annotation
+# 1. PRIVATE HELPERS — parsing, column inspection, message wording
 # ===========================================================================
 
 #' Read one uploaded CSV, strictly
@@ -90,10 +117,10 @@
 
 #' Distinct values of a status column, labelled with their row counts
 #'
-#' Produces the `selectInput` choices required by contract H.1 — the label is
-#' the value and its count, e.g. `"1 (299 rows)"`, and the value passed on is
-#' the bare level as a character string. `NA` is never offered: rows with a
-#' missing status are dropped by `ca_clean_surv()`.
+#' Produces the `selectInput` choices required by BUILD_CONTRACT H.1 — the
+#' label is the value and its count, e.g. `"1 (299 rows)"`, and the value
+#' passed on is the bare level as a character string. `NA` is never offered:
+#' rows with a missing status are dropped by `ca_clean_surv()`.
 #'
 #' @return a named character vector, possibly of length zero
 #' @noRd
@@ -136,224 +163,47 @@
 }
 
 
-#' Annotate the package's own Kaplan-Meier plot
+#' The one short sentence for a refusal — REVISION_CONTRACT §G.9, Data
 #'
-#' Repaints `state$fit$kmplot` — it recomputes nothing. Four layers are added
-#' on top of the curve the package drew, each one the visual counterpart of a
-#' numbered check in the reading guide (contract J.1):
+#' `ca_clean_surv()` (helpers.R F.17) is the single authority on which mappings
+#' are refusable. Its own messages are longer than §G.9 allows, so they are
+#' mapped here to the contract's one-line wording. The raw text is never
+#' discarded: the caller puts it verbatim in `ca_tech()` underneath.
 #'
-#'   * the shaded follow-up-tail band, from the last event to the end of
-#'     follow-up (check 6), drawn *under* the curve so it never hides a step;
-#'   * the last-event-time marker, a dashed vertical rule (check 3);
-#'   * the censored-in-tail count label (check 5);
-#'   * the plateau guide, a dotted horizontal rule at the tail level (check 1).
+#' Anything unrecognised falls to the contract's catch-all row. That is
+#' deliberate — it also keeps a package message that names a file path or a
+#' regeneration command off the screen (G2) while leaving it readable in the
+#' technical-detail block.
 #'
-#' All tail numbers come from `ca_tail_facts()` (contract F.2) and the level
-#' from `ca_tail_level()` (F.3, `1 - immune$p_hat`). Nothing is computed here.
-#' When `zero_width` is TRUE — the largest observed time is an event — the band
-#' and its label are omitted and the caller shows the J.1 check-6 explanation.
-#'
-#' The risk table (`sp$table`) is returned untouched, so printing the returned
-#' object still renders the curve and the table together.
-#'
-#' @param sp a `ggsurvplot` object, or NULL
-#' @param prepared `state$prepared`
-#' @param tail_level numeric(1), the KM tail level, possibly `NA_real_`
-#' @return the same object with `sp$plot` replaced, or `sp` unchanged on any
-#'   failure
+#' @param txt the raw refusal text, from `ca_clean_surv()$error` or a condition
+#' @return character(1), one of the §G.9 sentences
 #' @noRd
-.data_annotate_km <- function(sp, prepared, tail_level = NA_real_) {
-  if (is.null(sp) || is.null(sp$plot) || !inherits(sp$plot, "ggplot")) return(sp)
+.data_sentence <- function(txt) {
+  if (is.null(txt) || !length(txt)) return("Preparing the data failed.")
+  txt <- as.character(txt)[[1L]]
 
-  out <- tryCatch({
-    p <- sp$plot
-    facts <- ca_tail_facts(prepared)
-
-    band_fill <- "#7a8390"
-    mark_col <- "#b4532a"
-    level_col <- "#2f6f6b"
-    lab_fill <- "grey97"
-    lab_col <- "grey15"
-
-    if (!is.null(facts) && is.finite(facts$last_event)) {
-
-      if (!isTRUE(facts$zero_width) && is.finite(facts$max_time)) {
-        # Prepended, not appended: a full-height rect added on top of a
-        # ggsurvplot would sit over the curve and the censoring ticks.
-        band <- ggplot2::annotate(
-          "rect",
-          xmin = facts$last_event, xmax = facts$max_time,
-          ymin = -Inf, ymax = Inf,
-          fill = band_fill, alpha = 0.16
-        )
-        p$layers <- c(list(band), p$layers)
-
-        # Anchored just inside the panel's right edge rather than on
-        # max_time: the band always reaches the right of the plot, and a long
-        # label placed on the data value itself clips when follow-up ends
-        # close to the axis limit (nwtco).
-        p <- p + ggplot2::annotate(
-          "label",
-          x = Inf, y = 0.97,
-          label = sprintf(
-            "follow-up tail: %s wide · %s censored, no events",
-            ca_num(facts$gap, 2), format(facts$n_cens_after, big.mark = ",", trim = TRUE)
-          ),
-          hjust = 1.03, vjust = 1, size = 3.1,
-          fill = lab_fill, colour = lab_col, linewidth = 0, alpha = 0.9
-        )
-      }
-
-      p <- p +
-        ggplot2::geom_vline(
-          xintercept = facts$last_event,
-          linetype = "22", linewidth = 0.6, colour = mark_col
-        ) +
-        ggplot2::annotate(
-          "label",
-          x = facts$last_event, y = 0.03,
-          label = sprintf("last event  %s", ca_num(facts$last_event, 2)),
-          hjust = 1.02, vjust = 0, size = 3.1,
-          fill = lab_fill, colour = mark_col, linewidth = 0, alpha = 0.9
-        )
-    }
-
-    if (is.finite(tail_level)) {
-      p <- p +
-        ggplot2::geom_hline(
-          yintercept = tail_level,
-          linetype = "dotted", linewidth = 0.6, colour = level_col
-        ) +
-        ggplot2::annotate(
-          "label",
-          x = 0, y = tail_level,
-          label = sprintf("tail level S = %s", ca_num(tail_level, 4)),
-          hjust = 0, vjust = -0.2, size = 3.1,
-          fill = lab_fill, colour = level_col, linewidth = 0, alpha = 0.9
-        )
-    }
-
-    sp$plot <- p
-    sp
-  }, error = function(e) sp)
-
-  out
-}
-
-
-#' The legend for the annotated plot
-#'
-#' Names each added mark and points at the numbered check in the reading guide
-#' it belongs to, so the plot and the guide share one vocabulary.
-#'
-#' @param facts `ca_tail_facts(state$prepared)`, possibly NULL
-#' @param tail_level numeric(1), possibly `NA_real_`
-#' @noRd
-.data_km_legend <- function(facts, tail_level) {
-  key <- function(swatch_style, name, text) {
-    htmltools::tags$li(
-      class = "ca-read__item",
-      htmltools::tags$span(class = "ca-key", style = swatch_style),
-      htmltools::tags$strong(name), " — ", text
-    )
+  if (grepl("not numeric", txt, fixed = TRUE) ||
+      grepl("`Y` must be numeric", txt, fixed = TRUE)) {
+    return("The time column is not numeric. Pick a numeric column.")
   }
-
-  zero <- !is.null(facts) && isTRUE(facts$zero_width)
-
-  band_text <- if (zero) {
-    "not drawn for this dataset: the largest observed time is an event, so the tail has no width. See check 6."
-  } else if (!is.null(facts)) {
-    htmltools::tagList(
-      "the follow-up tail: the stretch of time after the last event in which the study kept watching and nothing happened. It is ",
-      htmltools::tags$strong(ca_num(facts$gap, 2)),
-      " wide and holds ",
-      htmltools::tags$strong(format(facts$n_cens_after, big.mark = ",", trim = TRUE)),
-      " censored observations. This is check 6, and check 5 counts the ticks inside it."
-    )
-  } else {
-    "the follow-up tail: the stretch of time after the last event in which the study kept watching and nothing happened. See check 6."
+  if (grepl("No rows have that value", txt, fixed = TRUE)) {
+    return("No rows have that value, so there would be no events. Pick another.")
   }
-
-  htmltools::tagList(
-    htmltools::tags$ul(
-      class = "ca-read",
-      key("background:#7a8390;opacity:.30", "Shaded band", band_text),
-      key(
-        "background:#b4532a",
-        "Dashed vertical rule",
-        htmltools::tagList(
-          "the last event time",
-          if (!is.null(facts) && is.finite(facts$last_event)) {
-            htmltools::tagList(", ", htmltools::tags$strong(ca_num(facts$last_event, 2)))
-          },
-          ". Everything to its right is censoring only. This is check 3."
-        )
-      ),
-      key(
-        "background:#2f6f6b",
-        "Dotted horizontal rule",
-        htmltools::tagList(
-          "the tail level S",
-          if (is.finite(tail_level)) {
-            htmltools::tagList(" = ", htmltools::tags$strong(ca_num(tail_level, 4)))
-          },
-          ", the height the curve settles at. Read your rough cure fraction off it. This is check 1. It is the Kaplan-Meier level, not RECeUS π̂ — the two are close but they are different numbers."
-        )
-      ),
-      key(
-        "background:transparent;border:1px solid currentColor",
-        "Ticks on the curve",
-        "censored subjects. The risk table beneath the plot gives how many are still being watched at each time. This is check 4."
-      )
-    ),
-    if (zero) {
-      # Contract J.1, check 6 — the exact sentence for the degraded case.
-      ca_note(
-        "warning",
-        "The follow-up tail has no width",
-        htmltools::p(
-          htmltools::tags$strong("Zero gap and there is no evidence at all"),
-          ": if the largest observed time is an event the band has no width, and Maller-Zhou, ",
-          htmltools::tags$code("qn"), " and Shen all return “cannot be computed” together."
-        )
-      )
-    }
-  )
-}
-
-
-#' The "How to read this curve" panel — contract J.1
-#'
-#' The seven numbered checks and the closing conjunction rule. The text is the
-#' canonical constant from helpers.R, not a retyped copy, so this panel and the
-#' Qualitative tab's cannot drift apart.
-#' @noRd
-.data_km_guide <- function() {
-  # FIXPASS: was rendered beside the plot in a 5/12 column nested inside
-  # layout_sidebar, which left the prose ~340px wide (about 20 characters a
-  # line) and stretched the Data page past 10,000px. The full guide belongs to
-  # the Qualitative step; here it is collapsed by default and constrained to a
-  # readable measure.
-  htmltools::div(
-    class = "ca-km-guide",
-    bslib::accordion(
-      open = FALSE,
-      bslib::accordion_panel(
-        title = CA_COPY_KM_GUIDE_TITLE,
-        htmltools::HTML(CA_COPY_KM_GUIDE_HTML)
-      )
-    )
-  )
-}
-
-
-#' The plateau-is-not-proof callout — contract J.2
-#'
-#' Sits above the plot. Title and body are the canonical constants from
-#' helpers.R; the title already carries its warning glyph.
-#' @noRd
-.data_plateau_note <- function() {
-  ca_note("warning", CA_COPY_PLATEAU_TITLE, htmltools::HTML(CA_COPY_PLATEAU_HTML))
+  if (grepl("negative or not finite", txt, fixed = TRUE)) {
+    k <- sub(".*\\(([0-9]+) rows\\).*", "\\1", txt)
+    if (identical(k, txt)) k <- NULL
+    return(sprintf(
+      "%s rows have a negative or non-finite time. Fix the file and upload again.",
+      if (is.null(k)) "Some" else k
+    ))
+  }
+  if (grepl("nothing to analyse", txt, fixed = TRUE)) {
+    return("Every row has a missing time or status, so there is nothing to analyse.")
+  }
+  if (grepl("no events (or too few rows)", txt, fixed = TRUE)) {
+    return("These data have no events, so there is nothing to assess.")
+  }
+  "Preparing the data failed."
 }
 
 
@@ -363,19 +213,39 @@
 
 #' Data tab UI
 #'
-#' Sidebar: source, dataset or upload, the four mapping controls, Prepare.
-#' Main: messages, the six-number summary, the annotated Kaplan-Meier plot
-#' beside its reading guide, and the `head()` preview.
+#' Sidebar: source, dataset or upload, the four mapping controls. No button:
+#' the mapping prepares itself (§B.2). Main: messages, the data summary, the
+#' preview table. No figures — visual assessment is the Qualitative tab's job
+#' (REVISION_CONTRACT §E.2).
 #'
 #' @param id module id, equal to the nav id `"data"`
 #' @noRd
 mod_data_ui <- function(id) {
   ns <- NS(id)
 
-  builtin_choices <- stats::setNames(
-    names(CA_DATASETS),
-    vapply(CA_DATASETS, function(d) as.character(d$label), character(1))
-  )
+  # INTEGRATION FIX: the picker was a flat list of all nineteen names, even
+  # though datasets.R carries a `family` on every entry and its own header says
+  # "the picker groups ... so the list never becomes a flat wall of names".
+  # Both alternative versions group; the baseline now does too, from the same
+  # registry field, in CA_DATASET_FAMILIES order. A named list of named vectors
+  # is what selectInput() turns into <optgroup>s.
+  builtin_choices <- local({
+    fams <- if (exists("CA_DATASET_FAMILIES")) CA_DATASET_FAMILIES else character(0)
+    lab  <- function(k) as.character(CA_DATASETS[[k]]$label)
+    grouped <- list()
+    for (f in fams) {
+      keys <- Filter(function(k) identical(CA_DATASETS[[k]]$family, f), names(CA_DATASETS))
+      if (length(keys)) grouped[[f]] <- stats::setNames(keys, vapply(keys, lab, character(1)))
+    }
+    # Any entry whose family is missing from the list still has to be reachable.
+    placed <- unlist(grouped, use.names = FALSE)
+    rest   <- setdiff(names(CA_DATASETS), placed)
+    if (length(rest)) grouped[["Other"]] <- stats::setNames(rest, vapply(rest, lab, character(1)))
+    if (!length(grouped)) {
+      stats::setNames(names(CA_DATASETS),
+                      vapply(names(CA_DATASETS), lab, character(1)))
+    } else grouped
+  })
 
   controls <- bslib::sidebar(
     width = 330, open = "open", title = "Dataset",
@@ -396,7 +266,7 @@ mod_data_ui <- function(id) {
       fileInput(ns("file"), "CSV file", accept = ".csv", multiple = FALSE),
       htmltools::p(
         class = "ca-provenance",
-        "Comma-separated, one header row, decimal point. The file is read into this R session only."
+        "Comma-separated, one header row, decimal point. The file is read into this session only."
       )
     ),
 
@@ -414,18 +284,13 @@ mod_data_ui <- function(id) {
     htmltools::p(
       class = "ca-provenance",
       "Choose days-to-years if your time column is recorded in days."
-    ),
-
-    actionButton(ns("prepare"), "Prepare data", class = "btn btn-primary")
+    )
   )
 
   htmltools::div(
     class = "ca-section",
-    htmltools::tags$h1(class = "ca-section__title", "Load and prepare your data"),
-    htmltools::p(
-      class = "ca-lede",
-      "Pick a built-in example or upload a CSV, tell the app which column is the time, which is the status and which value means the event, then press Prepare data. Everything downstream reads the prepared frame and nothing else."
-    ),
+    # §G.3: page title is one word, and there is no lede.
+    htmltools::tags$h1(class = "ca-section__title", "Data"),
 
     bslib::layout_sidebar(
       sidebar = controls,
@@ -434,29 +299,15 @@ mod_data_ui <- function(id) {
       uiOutput(ns("summary_card")),
 
       ca_card(
-        title = "Kaplan-Meier curve, annotated",
-        lede = "The package's own curve and risk table, with the follow-up tail, the last event and the tail level marked on it.",
+        title = "Data preview",
         body = htmltools::tagList(
-          .data_plateau_note(),
-          # FIXPASS: the plot now takes the full content width and the reading
-          # guide sits below it, collapsed. See .data_km_guide().
-          htmltools::div(
-            class = "ca-plot",
-            plotOutput(ns("km_plot"), height = "560px"),
-            uiOutput(ns("km_legend"))
-          ),
-          .data_km_guide(),
-          htmltools::div(
-            class = "ca-hero",
-            actionButton(ns("to_qual_km"), "Work through the curve on the Qualitative step →", class = "btn btn-outline-primary")
+          DT::DTOutput(ns("head_table")),
+          # §G.3, verbatim, and the only sentence under the table.
+          htmltools::p(
+            class = "ca-provenance",
+            "Check that the time column and the event indicator are the ones you meant."
           )
         )
-      ),
-
-      ca_card(
-        title = "First rows of the prepared frame",
-        lede = "Y and D are what every package function reads. Check that D is 1 where you meant the event.",
-        body = DT::DTOutput(ns("head_table"))
       )
     )
   )
@@ -472,7 +323,7 @@ mod_data_ui <- function(id) {
 #' Writes `raw`, `label`, `source`, `map`, `dropped`, `prepared` and `fit`, and
 #' drives the `"empty"` / `"data_loaded"` / `"prepared"` / `"error"` statuses.
 #' Every transition begins with `ca_reset_assessment(state)` so no verdict can
-#' outlive the frame that produced it (contract C.2).
+#' outlive the frame that produced it (BUILD_CONTRACT C.2).
 #'
 #' @param id module id, `"data"`
 #' @param state the one shared `reactiveValues`
@@ -493,9 +344,9 @@ mod_data_server <- function(id, state, go_to) {
     # 3.1 loading a dataset into state$raw
     # ---------------------------------------------------------------------
 
-    #' Install a freshly loaded frame, per the contract C.1 "dataset changed"
-    #' row: expert judgment is re-asked for the new population, and every
-    #' derived object is cleared.
+    #' Install a freshly loaded frame, per the REVISION_CONTRACT §C.3
+    #' "dataset changed" row: expert judgment is re-asked for the new
+    #' population, and every derived object is cleared.
     set_raw <- function(raw, label, src) {
       ca_reset_assessment(state)
       state$raw <- raw
@@ -505,22 +356,72 @@ mod_data_server <- function(id, state, go_to) {
       state$dropped <- NULL
       state$prepared <- NULL
       state$fit <- NULL
+      # §C.3: a clinician confirmed plausibility for THAT population, not for
+      # every population, so both answers and the derived flag are cleared.
+      # mod_expert.R is the only writer of these three fields thereafter.
+      state$expert_q1 <- ""
+      state$expert_q2 <- ""
       state$expert_confirmed <- FALSE
-      state$expert_note <- ""
-      state$visual_ack <- FALSE
       state$status <- "data_loaded"
       invisible(NULL)
     }
 
+    #' A first guess at the mapping for a file the registry has never seen.
+    #'
+    #' INTEGRATION FIX. The fallback used to be "the first numeric column is the
+    #' time and the FIRST column is the status", which on an ordinary two-column
+    #' `time,status` upload proposes the TIME column as the status column and
+    #' then picks the smallest time value as the event level. The app went on to
+    #' print a confident verdict on a dataset it had read as one event and 99.8%
+    #' censored. app-v2 had already worked around this locally; the heuristic is
+    #' lifted here so the baseline and both alternatives map an upload the same
+    #' way.
+    #'
+    #' It is a SUGGESTION, never a decision: all four controls stay under the
+    #' user's hand, and nothing here inspects a value to decide anything - it
+    #' reads column NAMES and counts distinct values, exactly the class of work
+    #' the registry defaults already do for the built-in examples.
+    #' @noRd
+    .guess_map <- function(raw) {
+      cols <- names(raw)
+      num  <- .data_numeric_cols(raw)
+      norm <- function(x) tolower(gsub("[^a-z0-9]", "", tolower(x)))
+      n_lv <- function(nm) length(unique(raw[[nm]][!is.na(raw[[nm]])]))
+
+      time_like   <- c("time", "y", "t", "futime", "survtime", "os", "pfs",
+                       "rfstime", "edrel")
+      status_like <- c("status", "d", "event", "cens", "censor", "died",
+                       "death", "rel", "delta")
+
+      pick <- function(candidates, wanted) {
+        hit <- candidates[norm(candidates) %in% wanted]
+        if (length(hit)) hit[[1L]] else NULL
+      }
+
+      tcol <- pick(num, time_like)
+      if (is.null(tcol)) tcol <- if (length(num)) num[[1L]] else NULL
+
+      rest <- setdiff(cols, tcol)
+      scol <- pick(rest, status_like)
+      if (is.null(scol)) {
+        two <- rest[vapply(rest, function(nm) n_lv(nm) == 2L, logical(1))]
+        scol <- if (length(two)) two[[1L]] else if (length(rest)) rest[[1L]] else NULL
+      }
+      list(time = tcol, status = scol)
+    }
+
     #' Point the four mapping controls at a frame, using the registry defaults
-    #' when there are any and sane fallbacks otherwise.
+    #' when there are any and the name/level heuristic above otherwise.
     refresh_mapping <- function(raw, entry = NULL) {
       num <- .data_numeric_cols(raw)
       all_cols <- names(raw)
+      guess <- if (is.null(entry)) .guess_map(raw) else list(time = NULL, status = NULL)
 
       t_def <- if (!is.null(entry) && entry$time %in% num) entry$time
+               else if (!is.null(guess$time)) guess$time
                else if (length(num)) num[[1L]] else NULL
       s_def <- if (!is.null(entry) && entry$status %in% all_cols) entry$status
+               else if (!is.null(guess$status)) guess$status
                else if (length(all_cols)) all_cols[[1L]] else NULL
 
       updateSelectInput(session, "col_time", choices = num, selected = t_def)
@@ -529,7 +430,11 @@ mod_data_server <- function(id, state, go_to) {
       lv <- .data_level_choices(.data_col(raw, s_def))
       e_def <- if (!is.null(entry) && as.character(entry$event_level) %in% lv) {
         as.character(entry$event_level)
-      } else if (length(lv)) lv[[1L]] else NULL
+      } else if (is.null(entry) && "1" %in% lv) {
+        # An uploaded 0/1 column means 1 = event far more often than it means
+        # 1 = censored, and the control is one click away either way.
+        "1"
+      } else if (length(lv)) lv[[length(lv)]] else NULL
       updateSelectInput(session, "event_level", choices = lv, selected = e_def)
 
       ts_def <- if (!is.null(entry) && entry$time_scale %in% c("none", "days_to_years")) {
@@ -618,7 +523,7 @@ mod_data_server <- function(id, state, go_to) {
       updateSelectInput(session, "event_level", choices = lv, selected = sel)
     }, ignoreInit = TRUE)
 
-    # Contract C.1: a mapping change clears the verdict. "Changed" means
+    # BUILD_CONTRACT C.1: a mapping change clears the verdict. "Changed" means
     # changed away from the mapping that produced state$prepared, so the echo
     # of our own updateSelectInput() calls is correctly a no-op.
     observeEvent(
@@ -642,28 +547,29 @@ mod_data_server <- function(id, state, go_to) {
     # 3.2 pre-flight validation
     # ---------------------------------------------------------------------
 
-    #' Everything that can be known about the current mapping without calling
-    #' a package function. Returns the J.10 messages in priority order and
-    #' whether Prepare must be refused.
     #' Everything knowable about the current mapping without calling a package
-    #' function, and whether Prepare must be refused.
+    #' function, and whether preparing must be refused.
     #'
-    #' `ca_clean_surv()` (helper F.17) is the single authority on which
-    #' mappings are refusable and on the exact J.10 sentence for each: a
-    #' non-numeric time column, a level matching no rows, negative or
-    #' non-finite times, every row dropped, and zero events after dropping all
-    #' come back in its `error`. Those sentences are surfaced here rather than
-    #' retyped, so this panel cannot drift from the helper. Only the two things
-    #' it does not cover are added: the reserved-name collision and the
+    #' `ca_clean_surv()` (helpers.R F.17) is the single authority on which
+    #' mappings are refusable: a non-numeric time column, a level matching no
+    #' rows, negative or non-finite times, every row dropped, and zero events
+    #' after dropping all come back in its `error`. Its text is mapped to the
+    #' §G.9 one-liner by `.data_sentence()` and carried verbatim underneath, so
+    #' this panel cannot drift from the helper. Only the two things the helper
+    #' does not cover are added: the reserved-name collision and the
     #' informational dropped-row count.
+    #'
+    #' V2_CONTRACT §B.0: no message carries a button, and neither does the
+    #' sidebar. A blocked mapping simply never prepares, and the sentence says
+    #' what to change.
     preflight <- reactive({
       raw <- state$raw
       msg <- list()
-      add <- function(kind, text, action_id = NULL, action_label = NULL) {
-        msg[[length(msg) + 1L]] <<- list(
-          kind = kind, text = text,
-          action_id = action_id, action_label = action_label
-        )
+      add <- function(kind, text) {
+        msg[[length(msg) + 1L]] <<- list(kind = kind, text = text, detail = NULL)
+      }
+      add_err <- function(text, detail) {
+        msg[[length(msg) + 1L]] <<- list(kind = "error", text = text, detail = detail)
       }
 
       tc <- input$col_time
@@ -681,16 +587,8 @@ mod_data_server <- function(id, state, go_to) {
       )
 
       if (!is.data.frame(cleaned$data)) {
-        txt <- if (!is.null(cleaned$error)) cleaned$error else "Preparing the data failed."
-        # the two refusals the user can escape with a control rather than by
-        # editing the file
-        if (grepl("nothing to analyse", txt, fixed = TRUE)) {
-          add("error", txt, "go_upload", "Upload a different file")
-        } else if (grepl("no events (or too few rows)", txt, fixed = TRUE)) {
-          add("error", txt, "go_builtin", "Pick a built-in example")
-        } else {
-          add("error", txt)
-        }
+        raw_txt <- if (!is.null(cleaned$error)) cleaned$error else "Preparing the data failed."
+        add_err(.data_sentence(raw_txt), raw_txt)
         return(list(block = TRUE, msg = msg, cleaned = cleaned))
       }
 
@@ -705,40 +603,54 @@ mod_data_server <- function(id, state, go_to) {
 
       drp <- cleaned$dropped
       if (!is.null(drp) && isTRUE(drp$n_total > drp$n_kept)) {
+        # §G.3: the rows-dropped note stays — it is a data fact the user must
+        # see — shortened to one sentence plus the after-dropping caveat.
         add("info", sprintf(
-          "Dropped %s of %s rows with a missing time or status (missing time: %s; missing status: %s). Every n shown in this app is the analysed n, after dropping.",
+          "Dropped %s of %s rows with a missing time or status. Every count here is after dropping.",
           format(drp$n_total - drp$n_kept, big.mark = ",", trim = TRUE),
-          format(drp$n_total, big.mark = ",", trim = TRUE),
-          format(drp$n_time_na, big.mark = ",", trim = TRUE),
-          format(drp$n_status_na, big.mark = ",", trim = TRUE)
+          format(drp$n_total, big.mark = ",", trim = TRUE)
         ))
       }
 
       list(block = FALSE, msg = msg, cleaned = cleaned)
     })
 
-    observe({
-      updateActionButton(session, "prepare", disabled = isTRUE(preflight()$block))
-    })
+    # ---------------------------------------------------------------------
+    # 3.3 preparation — BUILD_CONTRACT I.1 then I.2, run automatically
+    # ---------------------------------------------------------------------
 
-    # ---------------------------------------------------------------------
-    # 3.3 preparation — contract I.1 then I.2
-    # ---------------------------------------------------------------------
+    # What `state$prepared` was last built from. A plain closure variable, not a
+    # state field: it exists only so a debounce that fires on an unchanged
+    # mapping does not refit, and nothing downstream can see it.
+    prepared_key <- NULL
+
+    #' The provenance of one preparation: the dataset identity plus the whole
+    #' mapping. Two preparations with the same key produce the same frame.
+    #' @noRd
+    .map_key <- function(time_col, status_col, event_level, time_scale) {
+      raw <- state$raw
+      paste(as.character(state$source), as.character(state$label),
+            if (is.data.frame(raw)) nrow(raw) else 0L,
+            if (is.data.frame(raw)) ncol(raw) else 0L,
+            as.character(time_col), as.character(status_col),
+            as.character(event_level), as.character(time_scale), sep = "|")
+    }
 
     #' Run the R3 recode, then the two package calls, then write state.
     #'
     #' Takes its mapping explicitly rather than reading `input$` so the launch
-    #' auto-prepare can run before the client has echoed the control values
+    #' preparation can run before the client has echoed the control values
     #' back. Everything is inside one `tryCatch`: a red Shiny stack trace on
     #' this tab is a bug.
     do_prepare <- function(time_col, status_col, event_level, time_scale) {
-      ca_reset_assessment(state)                       # contract C.2, first statement
+      ca_reset_assessment(state)                       # C.2, first statement
 
       raw <- state$raw
       if (!is.data.frame(raw)) return(invisible(NULL))
       event_level <- as.character(event_level)
 
       fail <- function(m) {
+        prepared_key <<- NULL
         state$prepared <- NULL
         state$fit <- NULL
         state$last_error <- m
@@ -751,31 +663,35 @@ mod_data_server <- function(id, state, go_to) {
         error = function(e) list(data = NULL, dropped = NULL, error = conditionMessage(e))
       )
       if (!is.data.frame(cleaned$data)) {
-        return(fail(if (!is.null(cleaned$error)) cleaned$error else "ca_clean_surv() returned no data."))
+        return(fail(if (!is.null(cleaned$error)) cleaned$error else "Preparing the data failed."))
       }
 
       d01 <- .data_col(cleaned$data, "..D01")
-      # Contract I: refuse before the package is called at all. Zero events
-      # makes MZ/Shen return 1, qn return 0 with warnings, and RECeUS throw.
+      # Refuse before the package is called at all. Zero events makes MZ/Shen
+      # return 1, qn return 0 with warnings, and RECeUS throw.
       if (nrow(cleaned$data) < 2L || is.null(d01) || sum(d01 == 1L, na.rm = TRUE) == 0L) {
         return(fail("This dataset has no events (or too few rows) to assess. Cure-model diagnostics need both events and censored observations."))
       }
 
       res <- tryCatch(
         withProgress(message = "Preparing data", value = 0, {
-          incProgress(0.2, detail = "Standardising Y and D")
-          prepared <- cureAssess::prepare.surv.data(       # contract I.1
+          incProgress(0.2, detail = "Standardising the time and event columns")
+          # I.1 — the ONLY prepare.surv.data() call in the app, and the only
+          # place time is scaled. Everything downstream reads state$prepared.
+          prepared <- cureAssess::prepare.surv.data(
             data = cleaned$data,
             time = "..Y_raw",
             status = "..D01",
             time_scale = time_scale
           )
-          incProgress(0.3, detail = "Fitting candidate models for the Kaplan-Meier plot")
+          incProgress(0.3, detail = "Fitting candidate models")
+          # I.2 — plot_km = TRUE so state$fit$kmplot exists for the Qualitative
+          # tab, which is now the only screen that draws it.
           # suppressMessages(): survminer's ggsurvplot emits the cosmetic
           # ggplot2 4.x note 'Ignoring unknown labels: fill "Strata"' while it
           # builds the risk table. Nothing statistical is suppressed - warnings
           # and errors still propagate.
-          fit <- suppressMessages(cureAssess::model.fitting(  # contract I.2
+          fit <- suppressMessages(cureAssess::model.fitting(
             data = prepared,
             plot_km = TRUE,
             include_lognormal = FALSE
@@ -792,6 +708,7 @@ mod_data_server <- function(id, state, go_to) {
         time = time_col, status = status_col,
         event_level = event_level, time_scale = time_scale
       )
+      prepared_key <<- .map_key(time_col, status_col, event_level, time_scale)
       state$dropped <- cleaned$dropped
       state$prepared <- res$prepared
       state$fit <- res$fit
@@ -800,44 +717,72 @@ mod_data_server <- function(id, state, go_to) {
       invisible(NULL)
     }
 
-    #' The Prepare action, shared by the sidebar button and by the Prepare
-    #' button the empty states offer. Two controls, two distinct input ids,
-    #' one code path.
-    prepare_now <- function() {
+    # ---- THE AUTO-PREPARE (§B.1 reactive 1, §B.2) -------------------------
+    # The 5-tuple, debounced by 600 ms. Every intermediate change restarts the
+    # timer, so switching dataset — which also rewrites the four mapping
+    # controls from the registry — costs exactly one preparation, fired once
+    # everything has settled. There is no Prepare button anywhere.
+    map_tuple <- debounce(
+      reactive({
+        list(
+          source      = input$source,
+          key         = input$builtin,
+          upload      = if (is.null(input$file)) NULL else input$file$datapath,
+          time        = input$col_time,
+          status      = input$col_status,
+          event_level = input$event_level,
+          time_scale  = input$time_scale
+        )
+      }),
+      600
+    )
+
+    # observeEvent runs its handler isolated, so nothing below adds a
+    # dependency: the tuple above is the only trigger.
+    observeEvent(map_tuple(), {
+      tup <- map_tuple()
+      if (!is.data.frame(state$raw)) return(invisible(NULL))
+      if (is.null(tup$time) || is.null(tup$status) || is.null(tup$event_level)) {
+        return(invisible(NULL))
+      }
+
+      # A debounce that lands on the mapping already prepared is a no-op — and
+      # must not call ca_reset_assessment(), which would throw away a perfectly
+      # current verdict.
+      #
+      # The status test is what makes that safe. Touching a mapping control
+      # clears the assessment immediately (§B.6) and leaves status "empty"; if
+      # the user then puts the control back, the key matches again but
+      # `state$assess` is gone and `state$prepared` is the SAME object, so the
+      # assessment — which triggers on that object changing — would never be
+      # rebuilt. Preparing again writes a new frame and everything downstream
+      # recomputes. One fit, and only on the path that needs it.
+      key <- .map_key(tup$time, tup$status, tup$event_level, tup$time_scale)
+      if (identical(key, prepared_key) && is.data.frame(state$prepared) &&
+          state$status %in% c("prepared", "assessed")) {
+        return(invisible(NULL))
+      }
+
+      # A refusable mapping never reaches the package; the message panel is
+      # already saying which control to change.
       if (isTRUE(preflight()$block)) return(invisible(NULL))
-      do_prepare(input$col_time, input$col_status, input$event_level, input$time_scale)
-    }
 
-    ca_on_click(input, "prepare", function() prepare_now())
-    # FIXPASS (finding 3.1): every empty state used to emit its Prepare button
-    # under the single id "prepare_go", so up to three DOM elements shared one
-    # input id. Each actionButton binding keeps its own counter starting at 0,
-    # so a click on the second or third of them sent the same value the first
-    # had already sent — not an increment — and ca_on_click()'s strict-increment
-    # guard correctly refused to fire. Two of the three visible buttons were
-    # dead. Each empty state now carries its own id; all four are registered
-    # here against the one handler.
-    ca_on_click(input, "prepare_go_empty", function() prepare_now())
-    ca_on_click(input, "prepare_go_loaded", function() prepare_now())
-    ca_on_click(input, "prepare_go_summary", function() prepare_now())
-    ca_on_click(input, "prepare_go_km", function() prepare_now())
+      do_prepare(tup$time, tup$status, tup$event_level, tup$time_scale)
+    }, ignoreInit = FALSE)
 
-    # the two shortcuts the error states offer
-    ca_on_click(input, "go_builtin", function() updateRadioButtons(session, "source", selected = "builtin"))
-    ca_on_click(input, "go_upload", function() updateRadioButtons(session, "source", selected = "upload"))
-
-    # Launch auto-prepare of gbsg (contract C.1) so the first screen a user
-    # sees carries a real summary card and a real curve.
+    # Launch preparation of gbsg (BUILD_CONTRACT C.1, V2_CONTRACT §B.2) so the
+    # first screen a user sees carries a real summary card and a real preview,
+    # and the Recommendation step is never locked. Running it here rather than
+    # waiting for the debounce means no tab is empty on first paint; the
+    # debounced observer then recognises its own key and does not refit.
     observeEvent(TRUE, {
       entry <- load_builtin("gbsg")
       if (is.null(entry)) return(invisible(NULL))
       do_prepare(entry$time, entry$status, as.character(entry$event_level), entry$time_scale)
     }, once = TRUE, ignoreInit = FALSE)
 
-    ca_on_click(input, "to_qual_km", function() go_to("qual"))
-
     # ---------------------------------------------------------------------
-    # 3.4 messages
+    # 3.4 messages — every sentence is REVISION_CONTRACT §G.9, Data
     # ---------------------------------------------------------------------
 
     output$data_msg <- renderUI({
@@ -848,31 +793,32 @@ mod_data_server <- function(id, state, go_to) {
       # upload-time parse failures first: without a frame nothing else applies
       up <- upload_parsed()
       if (identical(input$source, "upload") && !is.null(up) && !is.null(up$error)) {
+        unreadable <- "That file could not be read as CSV. Check it is comma-separated with a header row."
+        not_csv <- "That file does not look comma-separated. Save it as a comma-separated CSV and upload again."
+
         out[[length(out) + 1L]] <- switch(
           up$error,
           unreadable = ca_note(
-            "warning", "That file could not be read",
-            htmltools::p("That file could not be read as CSV. Check that it is comma-separated with a header row.")
+            "warning", "That file could not be read", htmltools::p(unreadable)
           ),
           parse = ca_note(
             "warning", "That file could not be read",
             htmltools::tagList(
-              htmltools::p("That file could not be read as CSV. Check that it is comma-separated with a header row."),
+              htmltools::p(unreadable),
               ca_tech(htmltools::tags$pre(up$detail))
             )
           ),
           delimiter = ca_note(
             "warning", "Wrong delimiter",
             htmltools::tagList(
-              htmltools::p("This file looks semicolon-delimited, not comma-delimited. Please save it as a comma-separated CSV and upload again."),
+              htmltools::p(not_csv),
               ca_tech(htmltools::tags$pre(up$detail), title = "The first line of the file")
             )
           ),
           onecol = ca_note(
             "warning", "Wrong delimiter",
             htmltools::tagList(
-              htmltools::p("This file looks semicolon-delimited, not comma-delimited. Please save it as a comma-separated CSV and upload again."),
-              htmltools::p("Only one column was found, which usually means the delimiter is wrong."),
+              htmltools::p(not_csv),
               ca_tech(htmltools::tags$pre(up$detail), title = "The first line of the file")
             )
           ),
@@ -883,8 +829,7 @@ mod_data_server <- function(id, state, go_to) {
               format(up$detail, trim = TRUE)
             ))
           ),
-          ca_note("warning", "That file could not be read",
-                  htmltools::p("That file could not be read as CSV. Check that it is comma-separated with a header row."))
+          ca_note("warning", "That file could not be read", htmltools::p(unreadable))
         )
       } else if (identical(input$source, "upload") && !is.null(up) &&
                  identical(up$detail, "cleaned_names")) {
@@ -899,12 +844,10 @@ mod_data_server <- function(id, state, go_to) {
       # status is "error" and state$raw is NULL at the same time — so the user
       # met two blocks at once and the actionable one was the second. When an
       # error is already on screen the generic sentence is suppressed.
-      # FIXPASS (finding 3.1): own input id, was the shared "prepare_go".
       if ((identical(state$status, "empty") || is.null(state$raw)) &&
           !identical(state$status, "error")) {
         out[[length(out) + 1L]] <- ca_empty(
-          "Pick a built-in example or upload a CSV, then press Prepare data.",
-          action_id = session$ns("prepare_go_empty"), action_label = "Prepare data"
+          "Pick an example or upload a CSV."
         )
       }
 
@@ -914,44 +857,27 @@ mod_data_server <- function(id, state, go_to) {
         variant <- switch(m$kind, error = "warning", warning = "warning", "info")
         body <- htmltools::tagList(
           htmltools::p(m$text),
-          if (!is.null(m$action_id)) {
-            htmltools::div(
-              class = "ca-empty__action",
-              actionButton(session$ns(m$action_id), m$action_label, class = "btn btn-outline-secondary btn-sm")
-            )
-          },
+          # §G.9: the verbatim refusal goes underneath the short sentence,
+          # never instead of it.
+          if (!is.null(m$detail)) ca_tech(htmltools::tags$pre(m$detail))
         )
         out[[length(out) + 1L]] <- ca_note(variant, title, body)
       }
 
       if (identical(state$status, "error") && !is.null(state$last_error)) {
         le <- state$last_error
-        sentence <- if (grepl("`Y` must be numeric", le, fixed = TRUE)) {
-          "The time column you chose is not numeric. Pick a numeric column."
-        } else if (grepl("`D` must be coded as 0/1", le, fixed = TRUE)) {
-          "The event indicator could not be reduced to 0/1. Check which level you marked as the event."
-        } else if (grepl("is missing", le, fixed = TRUE)) {
-          # FIXPASS (finding 3.4): a missing data/examples/*.csv failed
-          # ca_dataset_load() and fell through to the generic sentence, burying
-          # the only actionable instruction — datasets.R's regeneration command
-          # — inside the collapsed technical-detail block. The package's own
-          # message is the visible sentence here; it names the file and the
-          # command that rebuilds it.
-          le
-        } else {
-          "Preparing the data failed."
-        }
         out[[length(out) + 1L]] <- ca_note(
           "warning", "Preparing the data failed",
-          htmltools::tagList(htmltools::p(sentence), ca_tech(htmltools::tags$pre(le)))
+          htmltools::tagList(
+            htmltools::p(.data_sentence(le)),
+            ca_tech(htmltools::tags$pre(le))
+          )
         )
       }
 
       if (identical(state$status, "data_loaded") && !is.null(state$raw) && !isTRUE(pf$block)) {
         out[[length(out) + 1L]] <- ca_empty(
-          "Columns loaded. Choose your time column, your status column, and which value means the event — then press Prepare data.",
-          # FIXPASS (finding 3.1): own input id, was the shared "prepare_go".
-          action_id = session$ns("prepare_go_loaded"), action_label = "Prepare data"
+          "Choose the time column, the status column and which value means the event."
         )
       }
 
@@ -960,31 +886,28 @@ mod_data_server <- function(id, state, go_to) {
     })
 
     # ---------------------------------------------------------------------
-    # 3.5 the six-number summary
+    # 3.5 the data summary — six descriptive counts, ca_data_summary() (F.1)
     # ---------------------------------------------------------------------
 
     output$summary_card <- renderUI({
       prepared <- state$prepared
       if (!is.data.frame(prepared)) {
         return(ca_card(
-          title = "Summary of the prepared data",
-          body = ca_empty(
-            "Nothing is prepared yet. Press Prepare data to see the six descriptive numbers.",
-            # FIXPASS (finding 3.1): own input id, was the shared "prepare_go".
-            action_id = session$ns("prepare_go_summary"), action_label = "Prepare data"
-          )
+          title = "Data summary",
+          body = ca_empty("Nothing is prepared yet.")
         ))
       }
 
+      # F.1 — descriptive counts on state$prepared. No package field is read
+      # here and nothing inferential is computed.
       s <- tryCatch(ca_data_summary(prepared), error = function(e) NULL)
       if (is.null(s)) {
         return(ca_card(
-          title = "Summary of the prepared data",
-          body = ca_empty("The summary could not be computed for this frame.")
+          title = "Data summary",
+          body = ca_empty("The summary could not be computed.")
         ))
       }
 
-      unit <- if (identical(state$map$time_scale, "days_to_years")) "years" else "time units as supplied"
       stale <- !identical(state$status, "prepared") && !identical(state$status, "assessed")
 
       # FIXPASS (finding 3.3): changing the time column, the status column, the
@@ -1000,37 +923,30 @@ mod_data_server <- function(id, state, go_to) {
       mapping_changed <- identical(state$status, "data_loaded")
 
       ca_card(
-        title = "Summary of the prepared data",
-        # One HTML string, not a tagList: htmltools puts each child of a
-        # tagList on its own line, and the browser collapses that newline into
-        # a space, which printed "in years ." with a gap before the stop.
-        lede = htmltools::HTML(paste0(
-          "Descriptive counts on the prepared frame &mdash; not cure-model ",
-          "statistics. Time is in <strong>", htmltools::htmlEscape(unit), "</strong>.",
-          if (mapping_changed) {
-            paste0(
-              " <strong>Showing the previously prepared mapping.</strong> ",
-              "Press Prepare data to apply your change."
-            )
-          } else {
-            ""
-          }
-        )),
+        title = "Data summary",
         chip = ca_chip("neutral", if (is.null(state$label)) "dataset" else state$label),
-        body = htmltools::div(
-          class = paste("ca-statrow", if (stale) "is-stale" else ""),
-          ca_kv("n analysed", format(s$n, big.mark = ",", trim = TRUE),
-                "rows kept after dropping a missing time or status"),
-          ca_kv("events", format(s$events, big.mark = ",", trim = TRUE),
-                "rows with D = 1"),
-          ca_kv("censored", paste0(ca_num(s$censored_pct, 1), "%"),
-                "share of rows with D = 0"),
-          ca_kv("median follow-up", ca_num(s$median_followup, 3),
-                "median of observed follow-up times, all subjects"),
-          ca_kv("max follow-up", ca_num(s$max_followup, 3),
-                "largest observed time, event or censored"),
-          ca_kv("last event time", ca_num(s$last_event_time, 3),
-                "largest time at which an event occurred")
+        body = htmltools::tagList(
+          if (mapping_changed) {
+            htmltools::p(
+              class = "ca-provenance",
+              htmltools::tags$strong("Showing the previous mapping.")
+            )
+          },
+          htmltools::div(
+            class = paste("ca-statrow", if (stale) "is-stale" else ""),
+            ca_kv("n analysed", format(s$n, big.mark = ",", trim = TRUE),
+                  "rows kept after dropping a missing time or status"),
+            ca_kv("events", format(s$events, big.mark = ",", trim = TRUE),
+                  "rows where the event happened"),
+            ca_kv("censored", paste0(ca_num(s$censored_pct, 1), "%"),
+                  "share of rows with no event"),
+            ca_kv("median follow-up", ca_num(s$median_followup, 3),
+                  "median of observed follow-up times, all subjects"),
+            ca_kv("max follow-up", ca_num(s$max_followup, 3),
+                  "largest observed time, event or censored"),
+            ca_kv("last event time", ca_num(s$last_event_time, 3),
+                  "largest time at which an event occurred")
+          )
         ),
         foot = if (!is.null(state$dropped)) {
           htmltools::p(class = "ca-provenance", sprintf(
@@ -1043,64 +959,12 @@ mod_data_server <- function(id, state, go_to) {
     })
 
     # ---------------------------------------------------------------------
-    # 3.6 the annotated Kaplan-Meier plot and its legend
-    # ---------------------------------------------------------------------
-
-    #' The KM tail level, from the package's immune summary.
-    #'
-    #' Contract I.3: read `state$assess$tests$immune` when the assessment has
-    #' run, otherwise call `immune.test()` here. `ca_tail_level()` is the
-    #' permitted subtraction `1 - p_hat`, and the result is the Kaplan-Meier
-    #' level, never RECeUS pi-hat.
-    tail_level <- reactive({
-      prepared <- state$prepared
-      if (!is.data.frame(prepared)) return(NA_real_)
-      imm <- if (ca_has_tests(state)) {
-        state$assess$tests$immune
-      } else {
-        tryCatch(cureAssess::immune.test(dat = prepared), error = function(e) NULL)
-      }
-      if (is.null(imm)) return(NA_real_)
-      tryCatch(ca_tail_level(imm), error = function(e) NA_real_)
-    })
-
-    output$km_plot <- renderPlot({
-      sp <- state$fit$kmplot
-      validate(need(
-        !is.null(sp),
-        "The Kaplan-Meier plot is missing. Press Prepare data again."
-      ))
-
-      # theme.R owns the repaint; call it only if builder-css shipped it.
-      if (exists("ca_style_survplot", mode = "function")) {
-        sp <- tryCatch(ca_style_survplot(sp), error = function(e) sp)
-      }
-      sp <- .data_annotate_km(sp, state$prepared, tail_level())
-
-      # survminer emits a cosmetic "Ignoring unknown labels" message at print.
-      suppressWarnings(suppressMessages(print(sp)))
-    }, res = 104)
-
-    output$km_legend <- renderUI({
-      prepared <- state$prepared
-      if (!is.data.frame(prepared) || is.null(state$fit$kmplot)) {
-        return(ca_empty(
-          "The Kaplan-Meier plot is missing. Press Prepare data again.",
-          # FIXPASS (finding 3.1): own input id, was the shared "prepare_go".
-          action_id = session$ns("prepare_go_km"), action_label = "Prepare data"
-        ))
-      }
-      facts <- tryCatch(ca_tail_facts(prepared), error = function(e) NULL)
-      .data_km_legend(facts, tail_level())
-    })
-
-    # ---------------------------------------------------------------------
-    # 3.7 head() preview, Y and D first
+    # 3.6 head() preview, Y and D first
     # ---------------------------------------------------------------------
 
     output$head_table <- DT::renderDT({
       prepared <- state$prepared
-      validate(need(is.data.frame(prepared), "Press Prepare data to see the first rows."))
+      validate(need(is.data.frame(prepared), "The first rows appear once a dataset is loaded."))
 
       d <- utils::head(prepared, 10L)
       # the two scratch columns ca_clean_surv() adds are exact duplicates of
@@ -1109,12 +973,25 @@ mod_data_server <- function(id, state, go_to) {
       ord <- c(intersect(c("Y", "D"), names(d)), setdiff(names(d), c("Y", "D")))
       d <- d[, ord, drop = FALSE]
 
-      DT::datatable(
+      # Columns that are not whole numbers are shown to 4 decimals. This is a
+      # DISPLAY format only — `d` is untouched and nothing downstream reads this
+      # table. Y is a derived column (the time scaling divides by 365.25), so
+      # its full binary expansion is floating-point noise that makes the preview
+      # unreadable without helping anyone check their column choice.
+      num <- names(d)[vapply(d, is.numeric, logical(1))]
+      frac <- num[vapply(d[num], function(x) {
+        x <- x[is.finite(x)]
+        length(x) > 0L && any(x != round(x))
+      }, logical(1))]
+
+      tbl <- DT::datatable(
         d,
         rownames = FALSE,
         class = "compact stripe",
         options = list(dom = "t", ordering = FALSE, scrollX = TRUE, pageLength = 10L)
       )
+      if (length(frac)) tbl <- DT::formatRound(tbl, columns = frac, digits = 4L)
+      tbl
     })
 
     invisible(NULL)

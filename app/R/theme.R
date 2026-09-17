@@ -121,7 +121,12 @@ ca_tokens <- function(dark = FALSE) {
       series = c(petrol = "#00739B", ember = "#C2571F", claret = "#8D2157"),
       band_alpha = 0.12, censor = "#0A5670",
       tail_fill = "#E7ECEE", tail_rule = "#8A979B", tail_ink = "#414D52",
-      level = "#4E6068"
+      level = "#4E6068",
+      # V2_CONTRACT §F.4: the supported region of the cured-group plane is
+      # tinted with the app's own pass pair, so the rectangle in the chart is
+      # the same green as a pass chip on the page. Mirrors --ca-pass-bg and
+      # --ca-pass-line in app.css §1 / §1b.
+      pass_bg = "#E6F3E9", pass_line = "#B4D7BE"
     )
   } else {
     list(
@@ -131,7 +136,8 @@ ca_tokens <- function(dark = FALSE) {
       series = c(petrol = "#2E9BC6", ember = "#D4732F", claret = "#D8428A"),
       band_alpha = 0.16, censor = "#8CCBE2",
       tail_fill = "#20292C", tail_rule = "#8A979B", tail_ink = "#AEBCC0",
-      level = "#9DAEB4"
+      level = "#9DAEB4",
+      pass_bg = "#14291B", pass_line = "#2C4A33"
     )
   }
 }
@@ -475,6 +481,24 @@ ca_km_overlay_plot <- function(km, censor = NULL, overlay = NULL,
 #' @param dark logical(1), from `state$dark`.
 ca_style_survplot <- function(sp, dark = FALSE, base_size = 14) {
   s <- ca_series(dark)
+  k <- ca_tokens(dark)
+
+  # INTEGRATION FIX 1 (C3, no repetition): the fitting step titles the figure
+  # "Kaplan-Meier Survival Curve", and every card that mounts it is ALREADY
+  # headed "Kaplan-Meier curve" - the same words twice, 40px apart, on all
+  # three versions. The card keeps the title; the figure drops it.
+  # INTEGRATION FIX 2: a single-group curve was drawing a legend reading
+  # "Strata / All", which names a grouping the app never makes. Dropped
+  # whenever there is one stratum; a real split still gets its legend.
+  # INTEGRATION FIX 3 (dark mode): the risk-table numbers inherit the strata
+  # COLOUR scale, which on the dark ramp is a mid petrol on near-black and was
+  # reported as barely legible. They are re-inked to the body colour, which is
+  # what they are - labels, not a second data series.
+  n_strata <- tryCatch({
+    st <- sp$plot$data$strata
+    if (is.null(st)) 1L else length(unique(stats::na.omit(as.character(st))))
+  }, error = function(e) 1L)
+
   restyle <- function(g, tbl = FALSE) {
     if (!inherits(g, "ggplot")) return(g)
     suppressMessages(
@@ -482,12 +506,39 @@ ca_style_survplot <- function(sp, dark = FALSE, base_size = 14) {
         ggplot2::scale_colour_manual(values = rep(s, length.out = 12)) +
         ggplot2::scale_fill_manual(values = rep(s, length.out = 12)) +
         theme_cure_assess(dark, base_size = if (tbl) base_size * 0.9 else base_size) +
-        ggplot2::theme(legend.position = if (tbl) "none" else "top")
+        ggplot2::theme(
+          legend.position = if (tbl || n_strata < 2L) "none" else "top",
+          # Only the MAIN plot loses its title. The risk table keeps "Number at
+          # risk", which the body copy on every version points the reader at.
+          plot.title    = if (tbl) ggplot2::element_text(
+                              colour = k$ink, size = base_size * 0.95,
+                              face = "bold", hjust = 0)
+                          else ggplot2::element_blank(),
+          plot.subtitle = if (tbl) ggplot2::element_text(colour = k$ink2)
+                          else ggplot2::element_blank(),
+          # the risk table's "Strata" axis title names nothing the user chose
+          axis.title.y  = if (tbl) ggplot2::element_blank() else ggplot2::element_text(
+            colour = k$ink2, size = base_size * 0.93)
+        )
     )
   }
+
+  #' Re-ink the risk-table numbers, which are drawn as a text layer.
+  reink <- function(g) {
+    if (!inherits(g, "ggplot")) return(g)
+    for (i in seq_along(g$layers)) {
+      L <- g$layers[[i]]
+      if (inherits(L$geom, "GeomText") || inherits(L$geom, "GeomLabel")) {
+        g$layers[[i]]$aes_params$colour <- k$ink
+        g$layers[[i]]$mapping$colour <- NULL
+      }
+    }
+    g
+  }
+
   if (inherits(sp, "ggsurvplot") || is.list(sp)) {
     if (!is.null(sp$plot))         sp$plot         <- restyle(sp$plot)
-    if (!is.null(sp$table))        sp$table        <- restyle(sp$table, tbl = TRUE)
+    if (!is.null(sp$table))        sp$table        <- reink(restyle(sp$table, tbl = TRUE))
     if (!is.null(sp$ncensor.plot)) sp$ncensor.plot <- restyle(sp$ncensor.plot, tbl = TRUE)
     return(sp)
   }
@@ -526,12 +577,14 @@ CA_ICON_PATHS <- list(
   data  = '<rect x="2.4" y="3.2" width="11.2" height="9.6" rx="1.2" stroke-width="1.2"/><path stroke-width="1.2" d="M2.4 6.4h11.2M6.4 6.4v6.4M10 6.4v6.4"/>',
   quant = '<path stroke-width="1.2" d="M2.4 13h11.2M4.2 13V8.8M7.2 13V5.2M10.2 13v-2.4M13.2 13V7"/>',
   qual  = '<path stroke-width="1.2" d="M2.4 4.3v3.4h2.9v2.7h3.4v2.1h4.9"/>',
-  conclusion = '<path stroke-width="1.2" d="M3.7 13.6V2.7"/><path stroke-width="1.2" d="M3.7 3.4h7.3l-1.4 2.5 1.4 2.5H3.7z"/>',
+  rec   = '<path stroke-width="1.2" d="M3.7 13.6V2.7"/><path stroke-width="1.2" d="M3.7 3.4h7.3l-1.4 2.5 1.4 2.5H3.7z"/>',
+  expert = '<circle cx="8" cy="5.4" r="2.4" stroke-width="1.2"/><path stroke-width="1.2" d="M3.2 13.2a4.8 4.8 0 0 1 9.6 0"/>',
   docs  = '<circle cx="8" cy="8" r="5.6" stroke-width="1.2"/><path stroke-width="1.2" d="M6.5 6.4a1.56 1.56 0 1 1 2.1 1.5c-.4.16-.56.48-.56.88v.28"/><circle cx="8" cy="11" r=".68" fill="currentColor" stroke="none"/>'
 )
 # Older spellings of two rail ids, so a caller that says "concl" or "help"
 # still gets the right picture instead of the fallback.
-CA_ICON_PATHS$concl <- CA_ICON_PATHS$conclusion
+CA_ICON_PATHS$concl      <- CA_ICON_PATHS$rec
+CA_ICON_PATHS$conclusion <- CA_ICON_PATHS$rec
 CA_ICON_PATHS$help  <- CA_ICON_PATHS$docs
 
 #' One inline SVG glyph.
@@ -544,7 +597,7 @@ CA_ICON_PATHS$help  <- CA_ICON_PATHS$docs
 #' An unknown name returns the neutral `dot` glyph rather than stopping — a
 #' missing picture must never take the app down mid-demo. Legal names:
 #' check, cross, dash, dot, ring, bang, warn, info, lock, arrow, eye,
-#' intro, data, quant, qual, conclusion, docs.
+#' intro, expert, data, quant, qual, rec, docs.
 #'
 #' @param name character(1), one of the names above.
 #' @param size pixel size of the square glyph.
@@ -562,4 +615,490 @@ ca_icon <- function(name, size = 16, class = NULL) {
     if (is.null(class)) "" else sprintf(' class="%s"', class),
     CA_ICON_PATHS[[name]]
   ))
+}
+
+
+# -----------------------------------------------------------------------------
+# 6. THE FOUR SHARED CHART BUILDERS — V2_CONTRACT §F.4
+#
+# DRAW-ONLY. Every number arrives through an argument; none of these calls a
+# cureAssess function, holds a reactive, reads `state` or computes a statistic.
+# The only arithmetic below is turning a value into a percentage position along
+# a bar, which is layout, not inference.
+#
+# All three versions (app/, app-v2/, app-v3/) call these. app-v2 and app-v3 may
+# READ this file and may never edit it (§F.2) — a chart that needs a new option
+# gets it here, from builder-shell, or not at all this pass.
+#
+# Two are HTML/CSS (the timeline and the threshold track) because they are one
+# bar with three labels: a graphics device would cost a PNG round trip, would
+# not reflow, would not inherit the dark ramp and could not be read by a screen
+# reader. Their styling lives in app/www/app.css §O.
+# Two are ggplot (the plane and the AIC dots) because they carry real axes.
+#
+# plotly is forbidden, so there is no hover layer anywhere. The compensation is
+# mandatory and is honoured below: every chart has at most ten marks, every mark
+# that matters is direct-labelled, and every chart has a table view beside it.
+#
+# THE NOT-COMPUTABLE LINE. Maller-Zhou, qn and Shen return NA together when the
+# largest observed time is an event (S6). The wording below is the same sentence
+# the Quantitative tab uses (`.QUANT_VOID_LINE`, mod_quantitative.R), repeated
+# here as a literal rather than read across files so this file has no run-time
+# dependency on another builder's module. If one moves, move both.
+# -----------------------------------------------------------------------------
+
+CA_VOID_LINE <- "Cannot be computed: the longest observed time is an event."
+
+#' Clamp a value to a percentage position along a bar. Layout, not statistics.
+#' @noRd
+.ca_pct_pos <- function(x, lo, hi) {
+  if (!is.finite(x) || !is.finite(lo) || !is.finite(hi) || hi <= lo) return(0)
+  max(0, min(100, 100 * (x - lo) / (hi - lo)))
+}
+
+#' A short numeric label for a chart tick. Not `ca_num()`: axis labels want
+#' three significant figures, not four decimals.
+#' @noRd
+.ca_tick <- function(x, digits = 3) {
+  if (is.null(x) || length(x) != 1L || is.na(x) || !is.finite(x)) return(ca_dash())
+  # trimws: formatC() pads short results to a common width, which would put
+  # leading spaces inside a tick label.
+  trimws(formatC(as.numeric(x), digits = digits, format = "g"))
+}
+
+
+# ---- F.4.1 ------------------------------------------------------------------
+#' The follow-up timeline — where the last event sits inside follow-up
+#'
+#' One 44px bar. The first segment runs from time zero to the last event; the
+#' second runs from the last event to the end of follow-up, which is the window
+#' the three follow-up readings key on. Ticks at 0, the last event and the end.
+#'
+#' When `zero_width` is TRUE the second segment has no width at all — the S6
+#' case — and the bar carries a void chip inline instead of three grey cards.
+#'
+#' Every number comes from `ca_tail_facts()`, which counts on the prepared
+#' frame's own `Y` and `D` and reads no package field.
+#'
+#' @param last_event numeric(1), `ca_tail_facts()$last_event`.
+#' @param max_time numeric(1), `ca_tail_facts()$max_time`.
+#' @param gap_pct numeric(1), `ca_tail_facts()$gap_pct`, the tail as a
+#'   percentage of follow-up. Used in the caption only.
+#' @param n_cens_after integer(1), `ca_tail_facts()$n_cens_after`.
+#' @param zero_width logical(1), `ca_tail_facts()$zero_width`.
+#' @param unit character(1), the time unit in words, for the tick labels.
+#' @param caption `TRUE` for the standard caption, `FALSE` for none, or a
+#'   character(1) to supply your own.
+#' @return `htmltools` `<figure class="ca-timeline">`.
+ca_viz_timeline <- function(last_event, max_time, gap_pct = NA_real_,
+                            n_cens_after = NA_integer_, zero_width = FALSE,
+                            unit = NULL, caption = TRUE) {
+
+  ok <- is.numeric(last_event) && is.numeric(max_time) &&
+    length(last_event) == 1L && length(max_time) == 1L &&
+    is.finite(last_event) && is.finite(max_time) && max_time > 0
+
+  if (!ok) {
+    return(htmltools::tags$figure(
+      class = "ca-timeline", `data-ca-state` = "void",
+      htmltools::tags$div(class = "ca-timeline__void", ca_chip("void", "Not available"))
+    ))
+  }
+
+  void  <- isTRUE(zero_width) || !(max_time > last_event)
+  share <- .ca_pct_pos(last_event, 0, max_time)
+  if (void) share <- 100
+
+  unit_txt <- if (is.null(unit) || !nzchar(unit)) "" else paste0(" ", unit)
+
+  # The figure is one picture: the label reads it aloud, and the segments and
+  # ticks are decorative to assistive technology.
+  alt <- if (void) {
+    paste0("Follow-up ends at ", .ca_tick(max_time), unit_txt,
+           ", on the last event. There is no window after it.")
+  } else {
+    paste0("The last event is at ", .ca_tick(last_event), unit_txt,
+           ". Follow-up continues to ", .ca_tick(max_time), unit_txt, ".")
+  }
+
+  cap <- if (isTRUE(caption)) {
+    if (void) {
+      CA_VOID_LINE
+    } else {
+      bits <- character(0)
+      if (is.numeric(gap_pct) && length(gap_pct) == 1L && is.finite(gap_pct)) {
+        bits <- c(bits, paste0(formatC(gap_pct, digits = 1, format = "f"),
+                               "% of follow-up falls after the last event"))
+      }
+      if (is.numeric(n_cens_after) && length(n_cens_after) == 1L &&
+          is.finite(n_cens_after)) {
+        bits <- c(bits, paste0(as.integer(n_cens_after),
+                               " still under observation there"))
+      }
+      if (length(bits) == 0L) NULL else paste0(paste(bits, collapse = ", "), ".")
+    }
+  } else if (is.character(caption) && length(caption) == 1L && nzchar(caption)) {
+    caption
+  } else {
+    NULL
+  }
+
+  tick <- function(value, pos, cls = NULL) htmltools::tags$span(
+    class = paste(c("ca-timeline__tick", cls), collapse = " "),
+    style = sprintf("left: %.4f%%;", pos),
+    htmltools::tags$span(class = "ca-timeline__tick-rule"),
+    htmltools::tags$span(class = "ca-timeline__tick-label ca-num", .ca_tick(value))
+  )
+
+  htmltools::tags$figure(
+    class = "ca-timeline",
+    `data-ca-state` = if (void) "void" else "ready",
+    htmltools::tags$div(
+      class = "ca-timeline__track", role = "img", `aria-label` = alt,
+      htmltools::tags$div(
+        class = "ca-timeline__seg ca-timeline__seg--observed",
+        style = sprintf("width: %.4f%%;", share)
+      ),
+      if (!void) htmltools::tags$div(
+        class = "ca-timeline__seg ca-timeline__seg--tail",
+        style = sprintf("width: %.4f%%;", 100 - share)
+      ),
+      if (void) htmltools::tags$div(
+        class = "ca-timeline__inline-chip", ca_chip("void", "No window")
+      )
+    ),
+    htmltools::tags$div(
+      class = "ca-timeline__axis",
+      tick(0, 0, "ca-timeline__tick--start"),
+      if (!void) tick(last_event, share),
+      tick(max_time, 100, "ca-timeline__tick--end")
+    ),
+    if (!is.null(cap)) htmltools::tags$figcaption(class = "ca-timeline__caption", cap)
+  )
+}
+
+
+# ---- F.4.2 ------------------------------------------------------------------
+#' One threshold track — a reading, its threshold, and which side is good
+#'
+#' One linear scale from zero to a little past the larger of the two values.
+#' The threshold is a tick; the reading is an 8px dot; the good side of the
+#' threshold is tinted. Direction is explicit, because it is not the same for
+#' the two readings that use this (S8).
+#'
+#' TWO TRACKS ARE DRAWN, NEVER THREE (S9). Maller-Zhou and qn are algebraically
+#' the same test, so a third track would draw one decision twice and read as two
+#' independent votes. The caller draws the qn track and passes the Maller-Zhou
+#' reading as `companion_line`, one sentence beneath it.
+#'
+#' A missing reading renders one void panel carrying the not-computable line —
+#' never the literal text NA, never a blank, never a red fail.
+#'
+#' @param stat numeric(1), the reading. `NA` renders the void panel.
+#' @param threshold numeric(1), the value it is compared against.
+#' @param larger_is_better logical(1). TRUE for qn, FALSE for Shen (S8).
+#' @param label character(1), the question the track answers, in words.
+#' @param companion_line character(1) or NULL — the S9 sentence.
+#' @param void_line character(1), the sentence used when `stat` is missing.
+#' @return `htmltools` `<figure class="ca-track">`.
+ca_viz_threshold_track <- function(stat, threshold, larger_is_better, label,
+                                   companion_line = NULL,
+                                   void_line = CA_VOID_LINE) {
+
+  num1 <- function(x) is.numeric(x) && length(x) == 1L && !is.na(x) && is.finite(x)
+
+  head <- htmltools::tags$figcaption(class = "ca-track__title", label)
+
+  if (!num1(stat) || !num1(threshold)) {
+    return(htmltools::tags$figure(
+      class = "ca-track", `data-ca-state` = "void",
+      head,
+      htmltools::tags$div(
+        class = "ca-track__void",
+        ca_chip("void", "Cannot be computed"),
+        htmltools::tags$p(class = "ca-track__void-text", void_line)
+      )
+    ))
+  }
+
+  bigger <- isTRUE(larger_is_better)
+  met    <- if (bigger) stat > threshold else stat < threshold
+
+  # The scale starts at zero and ends a little past whichever value is larger,
+  # so both marks are always inside the bar and the gap between them is drawn
+  # to scale. This is layout arithmetic, not a transformation of a statistic.
+  hi <- max(stat, threshold)
+  hi <- if (hi <= 0) 1 else hi * 1.12
+  p_stat <- .ca_pct_pos(stat, 0, hi)
+  p_thr  <- .ca_pct_pos(threshold, 0, hi)
+
+  good_style <- if (bigger) {
+    sprintf("left: %.4f%%; right: 0;", p_thr)
+  } else {
+    sprintf("left: 0; width: %.4f%%;", p_thr)
+  }
+
+  htmltools::tags$figure(
+    class = "ca-track",
+    `data-ca-met` = if (isTRUE(met)) "true" else "false",
+    head,
+    htmltools::tags$div(
+      class = "ca-track__bar",
+      role = "img",
+      `aria-label` = paste0(
+        label, " The reading is ", .ca_tick(stat, 4), ", against ",
+        .ca_tick(threshold, 4), ". ",
+        if (bigger) "Larger is better." else "Smaller is better."
+      ),
+      htmltools::tags$div(class = "ca-track__good", style = good_style),
+      htmltools::tags$div(class = "ca-track__thr",
+                          style = sprintf("left: %.4f%%;", p_thr)),
+      htmltools::tags$div(class = "ca-track__dot",
+                          style = sprintf("left: %.4f%%;", p_stat))
+    ),
+    htmltools::tags$div(
+      class = "ca-track__labels",
+      htmltools::tags$span(
+        class = "ca-track__stat ca-num", .ca_tick(stat, 4)),
+      htmltools::tags$span(
+        # INTEGRATION FIX: this read just "below 0.05", sitting at the right-hand
+        # end of the bar with the reading "0.3676" at the left - which parses as
+        # the false sentence "0.3676, below 0.05". It is the CRITERION, not a
+        # claim about the value, and it now says so. Same wording the
+        # Quantitative cards already use, so the two agree.
+        class = "ca-track__thr-label",
+        if (bigger) "needs to be above " else "needs to be below ",
+        htmltools::tags$span(class = "ca-num", .ca_tick(threshold, 4))
+      )
+    ),
+    if (!is.null(companion_line) && nzchar(companion_line)) {
+      htmltools::tags$p(class = "ca-track__companion", companion_line)
+    }
+  )
+}
+
+
+# ---- F.4.3 ------------------------------------------------------------------
+#' The cured-group plane — the two RECeUS quantities, plotted against each other
+#'
+#' 420x420. x is the ratio of censored uncured subjects, y is the cure fraction.
+#' The region in which both conditions hold is drawn as a tinted rectangle with
+#' a solid boundary and one corner label; the dataset is one dot, direct
+#' labelled with both values. One scale per axis, no dual axis, no legend.
+#'
+#' THE CUT-OFFS 0.025 AND 0.05 ARE DRAWN, NOT DECIDED. They are the package's
+#' own comparison (cureAssess/R/receus.method.R:116-117:
+#' `pi_hat > 0.025 && r_hat < 0.05`) and V2_CONTRACT §F.4 specifies the region
+#' explicitly. Drawing the region is decoration on a decision the package has
+#' already made and already reported in its decision string, which is the value
+#' every verdict in this app actually reads. Nothing here recomputes it, and the
+#' same literals are deliberately NOT written to the batch CSV (§C.4).
+#'
+#' @param pi_hat numeric(1), `$tests$receus$pi_hat`.
+#' @param r_hat numeric(1), `$tests$receus$r_hat`.
+#' @param extra `data.frame(label, pi, r)` of further points — the batch table's
+#'   other rows — or NULL. Drawn small and unlabelled, behind the main dot.
+#' @param dark logical(1), from `state$dark`. Trailing so the contract's
+#'   positional signature is unchanged; without it the chart could not follow
+#'   the dark ramp.
+#' @return A ggplot, or NULL when neither value is usable.
+ca_viz_receus_plane <- function(pi_hat, r_hat, extra = NULL, dark = FALSE) {
+  num1 <- function(x) is.numeric(x) && length(x) == 1L && !is.na(x) && is.finite(x)
+  if (!num1(pi_hat) || !num1(r_hat)) return(NULL)
+
+  k      <- ca_tokens(dark)
+  cols   <- ca_plot_cols(dark)
+  pi_cut <- 0.025
+  r_cut  <- 0.05
+
+  pts <- data.frame(pi = as.numeric(pi_hat), r = as.numeric(r_hat))
+  if (is.data.frame(extra) && nrow(extra) > 0L &&
+      all(c("pi", "r") %in% names(extra))) {
+    ex <- extra[is.finite(extra$pi) & is.finite(extra$r), c("pi", "r"), drop = FALSE]
+  } else {
+    ex <- NULL
+  }
+
+  x_hi <- max(c(pts$r, ex$r, r_cut * 2), na.rm = TRUE) * 1.08
+  x_hi <- if (!is.finite(x_hi) || x_hi <= 0) 0.2 else x_hi
+
+  lab <- paste0("cure fraction ", formatC(pts$pi, format = "f", digits = 3),
+                "\nratio ", formatC(pts$r, format = "f", digits = 4))
+
+  # INTEGRATION FIX: the direct label was always drawn to the RIGHT of and ABOVE
+  # the dot (hjust -0.12, vjust -0.18). With gbsg the ratio sits at 0.308 of a
+  # 0.36 axis and with sim_c the cure fraction sits at the ceiling, so ggplot2
+  # clipped the label at the panel edge and the two numbers vanished. The label
+  # now flips to the other side of the dot once the point passes 60% of either
+  # axis, which keeps it inside the panel at every value the app can produce.
+  lab_h <- if (pts$r  > x_hi * 0.60) 1.12 else -0.12
+  lab_v <- if (pts$pi > 0.78)        1.20 else -0.18
+
+  p <- ggplot2::ggplot() +
+    ggplot2::annotate("rect", xmin = -Inf, xmax = r_cut, ymin = pi_cut, ymax = Inf,
+                      fill = k$pass_bg, colour = NA) +
+    ggplot2::annotate("segment", x = r_cut, xend = r_cut, y = pi_cut, yend = Inf,
+                      colour = k$pass_line, linewidth = 0.6) +
+    ggplot2::annotate("segment", x = -Inf, xend = r_cut, y = pi_cut, yend = pi_cut,
+                      colour = k$pass_line, linewidth = 0.6) +
+    # Pinned just inside the shaded corner rather than hung off r_cut, which
+    # ran outside the panel whenever the axis maximum was small.
+    ggplot2::annotate("text", x = min(r_cut, x_hi) * 0.96, y = 1, label = "supported",
+                      hjust = 1, vjust = 1.6, size = 3.1,
+                      colour = k$ink2, family = "sans") +
+    ggplot2::annotate("segment", x = r_cut, xend = r_cut, y = -Inf, yend = pi_cut,
+                      colour = k$rule2, linewidth = 0.3, linetype = "22") +
+    ggplot2::annotate("segment", x = r_cut, xend = Inf, y = pi_cut, yend = pi_cut,
+                      colour = k$rule2, linewidth = 0.3, linetype = "22")
+
+  if (!is.null(ex) && nrow(ex) > 0L) {
+    p <- p + ggplot2::geom_point(
+      data = ex, shape = 21, size = 2.4, stroke = 0.7,
+      colour = cols$ink3, fill = NA,
+      ggplot2::aes(x = .data$r, y = .data$pi))
+  }
+
+  p +
+    ggplot2::geom_point(data = pts, size = 3.2, colour = k$ink,
+                        ggplot2::aes(x = .data$r, y = .data$pi)) +
+    ggplot2::annotate("text", x = pts$r, y = pts$pi, label = lab,
+                      hjust = lab_h, vjust = lab_v, size = 3.1, lineheight = 1.15,
+                      colour = k$ink2, family = "sans") +
+    ggplot2::scale_x_continuous(
+      limits = c(0, x_hi), expand = ggplot2::expansion(mult = c(0.02, 0.08))) +
+    ggplot2::scale_y_continuous(
+      limits = c(0, 1), breaks = seq(0, 1, 0.25),
+      expand = ggplot2::expansion(mult = c(0.02, 0.06))) +
+    ggplot2::labs(x = "Censored uncured subjects, as a ratio",
+                  y = "Estimated cure fraction") +
+    theme_cure_assess(dark) +
+    ggplot2::theme(legend.position = "none",
+                   panel.grid.major.y = ggplot2::element_line(
+                     colour = k$rule, linewidth = 0.3))
+}
+
+
+# ---- F.4.4 ------------------------------------------------------------------
+#' The model-comparison dot plot
+#'
+#' One row per candidate, in the package's own row order, on one linear axis.
+#'
+#' SHAPE, NOT HUE, carries the one distinction that matters: a model with a
+#' cured group is a filled dot, one without is a hollow ring. That survives
+#' colour-vision deficiency, greyscale and a projector lamp.
+#'
+#' S4 IS HONOURED HERE AND IS NOT NEGOTIABLE. A fit that failed keeps its row,
+#' is drawn as a cross pinned outside the axis with its reason beside it, and
+#' sorts last. It is never filtered out, because which models failed is itself
+#' informative. The sortable table stays beside this chart as the table view.
+#'
+#' NO DELTA ANYWHERE. The app differences nothing (S1); the eye reads the gap.
+#'
+#' @param aic_table `$screening$aic_table` — columns `model`, `model_type`,
+#'   `AIC`, `error`. Already ordered by the package, missing values last.
+#' @param best character(1) or NULL, `$screening$best_model`. Its dot is drawn
+#'   1.4x and carries a direct label.
+#' @param dark logical(1), from `state$dark`. Trailing, as above.
+#' @return A ggplot, or NULL when there is no usable table.
+ca_viz_aic_dots <- function(aic_table, best = NULL, dark = FALSE) {
+  if (!is.data.frame(aic_table) || nrow(aic_table) == 0L) return(NULL)
+  if (!all(c("model", "AIC") %in% names(aic_table))) return(NULL)
+
+  k <- ca_tokens(dark)
+
+  tbl <- aic_table
+  tbl$..aic  <- suppressWarnings(as.numeric(tbl$AIC))
+  tbl$..fail <- !is.finite(tbl$..aic)
+  tbl$..cure <- if ("model_type" %in% names(tbl)) {
+    identical_cure <- as.character(tbl$model_type) == "cure"
+    ifelse(is.na(identical_cure), grepl("_cure$", tbl$model), identical_cure)
+  } else {
+    grepl("_cure$", tbl$model)
+  }
+  tbl$..err <- if ("error" %in% names(tbl)) {
+    e <- as.character(tbl$error); e[is.na(e)] <- ""; e
+  } else {
+    rep("", nrow(tbl))
+  }
+
+  # Failed rows sort last, whatever order they arrived in (S4).
+  tbl <- tbl[order(tbl$..fail, tbl$..aic), , drop = FALSE]
+  lab <- vapply(as.character(tbl$model), function(m) {
+    if (!is.na(m) && m %in% names(CA_MODEL_LABELS)) CA_MODEL_LABELS[[m]] else m
+  }, character(1), USE.NAMES = FALSE)
+  tbl$..label <- factor(lab, levels = rev(lab))
+  tbl$..best  <- if (is.null(best) || length(best) != 1L || is.na(best)) {
+    rep(FALSE, nrow(tbl))
+  } else {
+    !is.na(tbl$model) & as.character(tbl$model) == as.character(best)
+  }
+
+  ok  <- tbl[!tbl$..fail, , drop = FALSE]
+  bad <- tbl[tbl$..fail, , drop = FALSE]
+  if (nrow(ok) == 0L) return(NULL)
+
+  # The crosses sit just outside the data range, on the axis's own scale, so a
+  # failed fit is visibly off the scale rather than pretending to a value.
+  span <- diff(range(ok$..aic))
+  if (!is.finite(span) || span <= 0) span <- max(abs(ok$..aic[1]), 1)
+  x_lo <- min(ok$..aic) - span * 0.06
+  x_fail <- min(ok$..aic) - span * 0.16
+
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_segment(
+      data = ok, linewidth = 0.3, colour = k$rule,
+      ggplot2::aes(x = x_lo, xend = .data$..aic,
+                   y = .data$..label, yend = .data$..label)) +
+    # INTEGRATION FIX: `fill` was set OUTSIDE aes() to the same petrol as the
+    # stroke, so shape 21 painted a SOLID dot and the documented "hollow ring =
+    # no cured group" distinction did not survive to the screen — both classes
+    # rendered identically. Fill is now mapped, and the non-cure fill is the
+    # panel's own surface, which reads as a true ring on light and dark alike.
+    ggplot2::geom_point(
+      data = ok, stroke = 1.1,
+      ggplot2::aes(x = .data$..aic, y = .data$..label,
+                   shape = .data$..cure, size = .data$..best,
+                   fill = .data$..cure),
+      colour = unname(k$series[["petrol"]]))
+
+  bst <- ok[ok$..best, , drop = FALSE]
+  if (nrow(bst) > 0L) {
+    p <- p + ggplot2::geom_text(
+      data = bst, hjust = -0.35, vjust = 0.4, size = 3.1,
+      colour = k$ink, family = "sans",
+      ggplot2::aes(x = .data$..aic, y = .data$..label,
+                   label = formatC(.data$..aic, format = "f", digits = 2)))
+  }
+
+  if (nrow(bad) > 0L) {
+    bad$..x <- x_fail
+    p <- p +
+      ggplot2::geom_point(
+        data = bad, shape = 4, size = 2.6, stroke = 1.1, colour = k$ink3,
+        ggplot2::aes(x = .data$..x, y = .data$..label)) +
+      ggplot2::geom_text(
+        data = bad, hjust = 0, vjust = 0.4, size = 2.9,
+        colour = k$ink3, family = "sans",
+        ggplot2::aes(x = .data$..x, y = .data$..label,
+                     label = paste0("   did not fit")))
+  }
+
+  p +
+    ggplot2::scale_shape_manual(values = c(`TRUE` = 21, `FALSE` = 21),
+                                breaks = c("TRUE", "FALSE"), guide = "none") +
+    ggplot2::scale_fill_manual(
+      values = c(`TRUE` = unname(k$series[["petrol"]]), `FALSE` = k$surface),
+      breaks = c("TRUE", "FALSE"), guide = "none") +
+    ggplot2::scale_size_manual(values = c(`TRUE` = 4.2, `FALSE` = 3.0),
+                               guide = "none") +
+    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0.04, 0.12))) +
+    ggplot2::labs(x = "Model comparison score — smaller is a better description",
+                  y = NULL) +
+    theme_cure_assess(dark) +
+    ggplot2::theme(
+      legend.position = "none",
+      panel.grid.major.y = ggplot2::element_blank(),
+      panel.grid.major.x = ggplot2::element_line(colour = k$rule, linewidth = 0.3),
+      axis.text.y = ggplot2::element_text(colour = k$ink2, hjust = 1)
+    )
 }

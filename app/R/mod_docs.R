@@ -1,267 +1,1075 @@
 # =============================================================================
-# mod_docs.R — the Documentation / Help tab (nav id "docs"), builder-tabs-b
+# mod_docs.R — the Documentation tab (nav id "docs"), builder-docs
 #
-# Static teaching content plus one live block: the provenance table, which reads
-# `state$assess` when it exists and prints "— not yet computed —" otherwise.
-# Package call sites: NONE. `utils::packageVersion()` is the only package-adjacent
-# call and it reads metadata, not statistics.
+# Static. Package call sites: NONE. This file reads no `state` field, no
+# package field and no package version, so it has no provenance to record.
 #
-# Every statistical sentence here is contract §J copy, a package `interpretation`
-# string, or a definition lifted from docs/cure-models-101.md. This file writes
-# no statistical prose of its own.
+# V2_CONTRACT §E (R3, R4, R5). This pass replaced the three-line-per-method
+# summaries with the full technical treatment: every reading is documented to
+# the depth of the package help text — what it measures, its definition, its
+# symbols, its direction, its decision rule, what is and is not implemented,
+# when it cannot be computed, and its source — set as typeset mathematics in
+# HTML + unicode + CSS (classes .ca-m / .ca-eq / .ca-hat / .ca-frac / .ca-syms,
+# defined in app/www/app.css §N, builder-shell). NO MathJax, NO KaTeX, NO CDN,
+# no webfont: the app is demonstrated offline. Math is never set inside <code>.
+#
+# Copy provenance: §E.2 (the five method blocks), §E.3 (how the simulated
+# examples are generated) and §E.4 (the glossary) are pasted verbatim from the
+# contract as raw strings and emitted with htmltools::HTML(). They are contract
+# copy: do not rewrite them here, and do not re-expand what §E deliberately cut.
+#
+# Deleted this pass, per §E.5:
+#   1. `.DOCS_SHORT_FOLLOWUP` and its "If follow-up is too short" accordion
+#      panel, in full (R4) — title, value and all four lines. The three
+#      references that supported those lines stay in the reference list.
+#   2. Nothing is rendered below the reference list; the reference list is the
+#      last element of ca_docs_sections() and remains so.
+#   3. The closing sentence of the three-checks panel is gone. It restated the
+#      R1 line deleted from the Intro tab — three checks, and a negative answer
+#      ending the assessment — and §E.5.3 requires zero occurrences repo-wide
+#      of that sentence or of any paraphrase of it. The three checks themselves
+#      stay; what goes is the ordering-and-stopping claim on top of them.
+# Earlier deletions (the provenance table, the FAQ, the worked readings, the
+# per-panel navigation buttons, the immune-summary panel, the three reference
+# cards, and everything that used to sit below References) stay deleted.
+#
+# G2/C1 holds: the reference list and the one package-link block beside the QR
+# code are the only places a package name appears, and no function name, field
+# name, R object or line of R code appears anywhere on screen.
+#
+# Shared with the alternatives (§F.1, §F.3): `ca_docs_sections()` is the frozen
+# entry point. app-v2's Method overlay and app-v3's Method mode render exactly
+# this function, so the words exist once. `mod_docs_ui()` adds only the tab's
+# own chrome (the page title and its one-line lede) around it.
 # =============================================================================
 
 
-# ---- the per-method explainers (contract §J.6, verbatim) --------------------
+# ---- panel 1: the three checks ----------------------------------------------
 
-# Six labelled lines per method, in the contract's order. Each method keeps its
-# own labels: the immune summary says "Threshold:" where the tests say
-# "Threshold, and where it comes from:", because it has none to source.
+# The poster's verbatim wording for the three steps. This is the only place in
+# the app the three steps are restated (C3 allows it on Documentation).
+.DOCS_CHECKS <- list(
+  c("Expert judgment",
+    "Is a cure biologically plausible? Is long-term survival without recurrence expected?"),
+  c("Visual assessment",
+    "Does the survival curve plateau, with late events absent?"),
+  c("Quantitative assessment",
+    "Is there strong quantitative evidence of sufficient follow-up and a cure fraction?")
+)
+
+
+# ---- §E.2 the five method blocks --------------------------------------------
+
+# Contract copy, pasted verbatim; one <article class="ca-method"> per reading,
+# each a short lead paragraph with the full mathematics behind a closed
+# <details class="ca-more"> disclosure.
 #
-# The *Reference:* lines carry the citations printed in the package's own
-# documentation (cureAssess/R/*.R roxygen @references). Contract §J.6 prints a
-# different volume and DOI for Maller-Zhou 1994 and for Shen 2000; those two
-# lines are demonstrably the 1992 Biometrika paper and a wrong DOI respectively,
-# so the §J.0 rule applies — the package wins over a defective docs line. Flagged
-# for the verify phase.
-.DOCS_METHODS <- list(
-  list(
-    key = "mz",
-    title = "Maller–Zhou test (1994) — mz.test()",
-    target = "quant",
-    target_label = "See this test on the Quantitative tab →",
-    lines = list(
-      c("The question it asks:", "did follow-up extend far enough past the last event that a plateau could be seen?"),
-      c("Direction:", "smaller is better — below α supports sufficient follow-up."),
-      c("Threshold, and where it comes from:", "α, an argument you can change; the package default is 0.05."),
-      c("When it returns nothing, and why:", "when the largest observed time is an event rather than a censored observation, there is no follow-up tail to measure and the statistic is undefined."),
-      c("Exact call and field:", "cureAssess::mz.test(dat, alpha) → $statistic, $alpha, $interpretation."),
-      c("Reference:", "Maller RA, Zhou S (1994). Testing for sufficient follow-up and outliers in survival data. Journal of the American Statistical Association, 89(428), 1499–1506. doi:10.1080/01621459.1994.10476889")
-    )
-  ),
-  list(
-    key = "qn",
-    title = "qn statistic (Maller & Zhou 1996) — qn.test()",
-    target = "quant",
-    target_label = "See this statistic on the Quantitative tab →",
-    lines = list(
-      c("The question it asks:", "what share of events fall inside a late window as wide as the flat tail?"),
-      c("Direction:", "larger is better — above the threshold supports sufficient follow-up. This is the opposite of Maller–Zhou and Shen; getting it backwards is a blocking bug."),
-      c("Threshold, and where it comes from:", "1 - α^(1/n), which moves with sample size. qn.test() returns no threshold field, so this app computes it from α and n — the single closed form the app is permitted to evaluate. The package's own sentence always quotes its own fixed 0.05 version."),
-      c("When it returns nothing, and why:", "the same gate as Maller–Zhou and Shen — largest observed time is an event."),
-      c("Exact call and field:", "cureAssess::qn.test(dat) → $statistic, $interpretation. There is no alpha argument and no $threshold field."),
-      c("Reference:", "Maller RA, Zhou X (1996). Survival Analysis with Long-Term Survivors. Wiley. Finite-sample behaviour: Maller RA, Resnick S, Shemehsavar S (2024). Canadian Journal of Statistics, 52(2), 359–379. doi:10.1002/cjs.11771")
-    )
-  ),
-  list(
-    key = "shen",
-    title = "Shen test (2000) — shen.test()",
-    target = "quant",
-    target_label = "See this test on the Quantitative tab →",
-    lines = list(
-      c("The question it asks:", "the same follow-up question, through a narrower late-time window."),
-      c("Direction:", "smaller is better — below α supports sufficient follow-up."),
-      c("Threshold, and where it comes from:", "α, an argument; default 0.05. Shen is the stricter of the two by design: it exists because Maller–Zhou can over-declare sufficiency."),
-      c("When it returns nothing, and why:", "same gate as above."),
-      c("Exact call and field:", "cureAssess::shen.test(dat, alpha) → $statistic, $alpha, $interpretation."),
-      c("Reference:", "Shen P-S (2000). Testing for sufficient follow-up in survival data. Statistics & Probability Letters, 49(4), 313–322. doi:10.1016/S0167-7152(00)00063-8")
-    )
-  ),
-  list(
-    key = "immune",
-    title = "Maller–Zhou immune summary (1996) — immune.test()",
-    target = "qual",
-    target_label = "See the curve this summarises on the Qualitative tab →",
-    lines = list(
-      c("The question it asks:", "what do the data look like at the end of follow-up — how much censoring, and was the last observation a censored subject?"),
-      c("Direction:", "none. This is descriptive, not a test. It has no statistic, no threshold and no null hypothesis, despite the name. It is never passed or failed."),
-      c("Threshold:", "there is none, and the app must not invent one."),
-      c("When it returns nothing:", "it always returns; p_cens is NA if the status column contains missing values."),
-      c("Exact call and fields:", "cureAssess::immune.test(dat) → $p_hat, $p_cens, $last_observation, $last_observation_censored, $interpretation."),
-      c("Reference:", "Maller RA, Zhou X (1996). Survival Analysis with Long-Term Survivors. Wiley. See also Maller RA, Zhou S (1992). Biometrika, 79(4), 731–739. doi:10.1093/biomet/79.4.731")
-    )
-  ),
-  list(
-    key = "receus",
-    title = "RECeUS — receus.method()",
-    target = "conclusion",
-    target_label = "See the decision it drives on the Conclusion tab →",
-    lines = list(
-      c("The question it asks:", "is the estimated cure fraction non-negligible, and is the share of uncured subjects still unresolved at the end of follow-up small enough to identify it?"),
-      c("Direction:", "two conditions, both required — π̂ greater than 0.025 and r̂ less than 0.05."),
-      c("Thresholds, and where they come from:", "0.025 and 0.05 are fixed inside the package source and reachable by no argument. They come from Selukar & Othus (2023), who chose and validated them."),
-      c("When it returns nothing, and why:", "when the maximum-likelihood fit behind it does not converge, π̂ and r̂ come back missing; the app reports that rather than a decision."),
-      c("Exact call and fields:", "cureAssess::receus.method(data, dist, whichTau) → $pi_hat, $r_hat, $tau, $cure_fraction_condition, $followup_condition, $decision, $interpretation, $estimates."),
-      c("Reference:", "Selukar S, Othus M (2023). RECeUS: Ratio estimation of censored uncured subjects, a different approach for assessing cure model appropriateness in studies with long-term survivors. Statistics in Medicine, 42(3), 209–227. doi:10.1002/sim.9610")
-    )
-  ),
-  list(
-    key = "screening",
-    title = "Model screening — model.fitting() / cure.appropriateness()",
-    target = "quant",
-    target_label = "See the AIC table on the Quantitative tab →",
-    lines = list(
-      c("The question it asks:", "among eight candidate models (ten with lognormal), four of them cure models, which has the smallest AIC?"),
-      c("Direction:", "smaller AIC is a better description of the data you have. It is not evidence that a cure model is identifiable — that is what the five diagnostics are for."),
-      c("Threshold:", "none. AIC is a ranking, not a test."),
-      c("When a row returns nothing, and why:", "an individual fit can fail to converge; the package records the reason in the error column and sets AIC = NA. Failed rows sort last and are always shown."),
-      c("Exact call and fields:", "cureAssess::cure.appropriateness(data, time, status, time_scale, dist, plot_km, run_tests, include_lognormal) → $screening$aic_table, $screening$best_model, $screening$initial_decision, $selected_receus_dist, $tests, $tests_reason, $final_recommendation."),
-      c("Reference:", "the cureAssess tutorial manuscript; package by Mudunkotuwa & Ghosh, MIT licence.")
-    )
-  )
+# [SIGN-OFF] the five *Direction* statements are the highest-risk copy in the
+# app. Reviewed against the package source, not against any document:
+#   mz.test()   stat < alpha  -> sufficient follow-up  (smaller is better)
+#   shen.test() stat < alpha  -> sufficient follow-up  (smaller is better)
+#   qn.test()   stat > 1 - alpha^(1/n) -> sufficient follow-up (LARGER is
+#               better, and the threshold moves with n)
+#   receus.method() pi_hat > 0.025 && r_hat < 0.05 -> "Cure model appropriate"
+#   model.fitting() ranks by AIC; smaller AIC, failed rows kept with a reason.
+# All three follow-up statistics return NA together when max(Y) equals the
+# largest event time (S6); RECeUS returns NA when the fit behind it fails.
+# S9 — mz = (1 - qn)^n exactly — is stated in both the Maller-Zhou block and
+# the qn block, and the two are never presented as independent votes.
+# §E.5 also requires that the non-implementation of the Maller, Resnick and
+# Shemehsavar (2024) exact finite-sample critical values survives into the app;
+# it is the "What is implemented here — and what is not" entry of the qn block.
+.DOCS_METHODS_HTML <- r"---(
+<div class="ca-section">
+  <h2 class="ca-section__title">The methods</h2>
+  <p class="ca-lede">
+    Five readings, in the order the assessment applies them. Each one is stated in a
+    sentence first; the definitions, thresholds and limits sit behind the disclosure
+    underneath it.
+  </p>
+
+
+  <!-- ===================================================================== -->
+  <!-- 1. MODEL COMPARISON (AIC)                                             -->
+  <!-- ===================================================================== -->
+  <article class="ca-method">
+    <h3>Model comparison</h3>
+    <p class="ca-method__lead">
+      Does a model that allows a permanently event-free group describe these data better
+      than one that does not? Eight models are fitted — four survival shapes, each with
+      and without a cured group — and ranked. If the best-ranked model is one without a
+      cured group, a cure model is not appropriate and nothing downstream can rescue it.
+    </p>
+
+    <details class="ca-more">
+      <summary>Definition, direction and decision rule</summary>
+      <div class="ca-more__body">
+        <dl class="ca-def">
+
+          <dt>What it measures</dt>
+          <dd>
+            Relative fit, penalised for the number of free parameters. For each candidate
+            model <span class="ca-m"><i>m</i></span>,
+            <span class="ca-eq">
+              AIC<sub>m</sub><span class="op">=</span>2<i>k</i><sub>m</sub><span class="op">&minus;</span>2&#8201;log&#8201;<span class="ca-hat it">L</span><sub>m</sub>
+            </span>
+            where <span class="ca-m"><span class="ca-hat it">L</span><sub>m</sub></span> is the
+            maximised likelihood and <span class="ca-m"><i>k</i><sub>m</sub></span> the number of
+            free parameters. For right-censored data the log-likelihood is
+            <span class="ca-eq">
+              log&#8201;<i>L</i><span class="op">=</span>&#8721;<sub class="up">i&#8201;=&#8201;1</sub><sup>n</sup>
+              <span class="br">&#123;</span><i>d</i><sub>i</sub>&#8201;log&#8201;<i>f</i><span class="br">(</span><i>y</i><sub>i</sub><span class="br">)</span>
+              <span class="op">+</span>
+              <span class="br">(</span>1<span class="op">&minus;</span><i>d</i><sub>i</sub><span class="br">)</span>&#8201;log&#8201;<i>S</i><span class="br">(</span><i>y</i><sub>i</sub><span class="br">)</span><span class="br">&#125;</span>
+            </span>
+          </dd>
+
+          <dt>The candidate set</dt>
+          <dd>
+            Four shapes for the event times — exponential, Weibull, gamma and log-logistic.
+            Each is fitted twice. Without a cured group the survival function is
+            <span class="ca-m"><i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="opt">;</span>&#8201;<i>&theta;</i><span class="br">)</span></span>.
+            With a cured group it is the mixture
+            <span class="ca-eq">
+              <i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>&pi;</i><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><i>&pi;</i><span class="br">)</span>&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="opt">;</span>&#8201;<i>&theta;</i><span class="br">)</span><span class="opt">,</span>&emsp;<i>&pi;</i><span class="op">&#8712;</span><span class="br">[</span>0<span class="opt">,</span>&#8201;1<span class="br">]</span>
+            </span>
+            which carries one extra free parameter. A fifth shape, the lognormal, can be
+            added; it is off by default because its heavy tail can move both the ranking
+            and the remaining-uncured ratio.
+          </dd>
+
+          <dt>Symbols</dt>
+          <dd>
+            <div class="ca-syms">
+              <div><span class="ca-m"><i>&pi;</i></span><span>the cure fraction — the share of the population that will never experience the event</span></div>
+              <div><span class="ca-m"><i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span></span><span>the latency survival function: survival of the uncured, falling from 1 to 0</span></div>
+              <div><span class="ca-m"><i>&theta;</i></span><span>the shape and scale parameters of the latency distribution</span></div>
+              <div><span class="ca-m"><i>y</i><sub>i</sub><span class="opt">,</span>&#8201;<i>d</i><sub>i</sub></span><span>the observed time for subject <span class="ca-m"><i>i</i></span> and its indicator, 1 for an event and 0 for censoring</span></div>
+              <div><span class="ca-m"><i>n</i></span><span>the number of subjects</span></div>
+            </div>
+          </dd>
+
+          <dt>Direction</dt>
+          <dd>
+            Smaller AIC is the better description. Evidence <em>for</em> a cure fraction is
+            the smallest-AIC model being one of the four with a cured group. Note what this
+            is not: a smaller AIC says a cure model describes the observed data better, not
+            that the cure fraction is identifiable from them. That second question is what
+            the follow-up readings and the ratio of censored uncured subjects answer.
+          </dd>
+
+          <dt>Decision rule</dt>
+          <dd>
+            Rank every candidate by AIC and take the smallest. There is no threshold, no
+            significance level and no sample-size dependence — it is a ranking, not a test.
+            If the winner is a model without a cured group, the conclusion is that a cure
+            model is not appropriate. If the winner has a cured group, the smallest-AIC
+            <em>cure</em> model supplies the distribution used for the ratio of censored
+            uncured subjects.
+          </dd>
+
+          <dt>What is implemented here</dt>
+          <dd>
+            The ranking only. No minimum AIC gap is required — the common
+            “<span class="ca-m">&Delta;</span>AIC<span class="ca-m"><span class="op">&gt;</span>2</span>”
+            convention is not applied, so a cure model that wins by 0.3 wins outright, and
+            a near-tie is visible in the table rather than resolved by a rule. There is no
+            bootstrap, no likelihood-ratio test between the nested pair, and no correction
+            for the cure fraction lying on the boundary of its parameter space. Ties are
+            broken by table order.
+          </dd>
+
+          <dt>When it cannot be computed</dt>
+          <dd>
+            An individual fit can fail to converge — too few events, a flat likelihood in
+            the cure fraction, or an estimate driven to the boundary. That model keeps its
+            row, carries the reason it failed, and sorts last; it is never hidden, because
+            which models failed is itself informative. If every fit fails there is no
+            ranking and the assessment stops.
+          </dd>
+
+          <dt>Source</dt>
+          <dd>
+            Akaike H (1974). A new look at the statistical model identification.
+            Model screening as the first stage of cure model assessment follows
+            Selukar &amp; Othus (2023), §2.4.
+          </dd>
+
+        </dl>
+      </div>
+    </details>
+  </article>
+
+
+  <!-- ===================================================================== -->
+  <!-- 2. MALLER-ZHOU                                                        -->
+  <!-- ===================================================================== -->
+  <article class="ca-method">
+    <h3>Maller&ndash;Zhou statistic</h3>
+    <p class="ca-method__lead">
+      Did follow-up run far enough past the last event for a flat tail to mean something?
+      The reading looks at a window at the end of the data, as wide as the quiet gap
+      between the last event and the end of follow-up, and asks how many events fall in it.
+      A long quiet gap preceded by events is what sufficient follow-up looks like.
+    </p>
+
+    <details class="ca-more">
+      <summary>Definition, direction and decision rule</summary>
+      <div class="ca-more__body">
+        <dl class="ca-def">
+
+          <dt>What it measures</dt>
+          <dd>
+            The separation between the largest event time and the end of follow-up,
+            expressed as the number of events falling within one gap-width of the last
+            event. It targets the condition
+            <span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub><span class="op">&lt;</span><i>&tau;</i><sub class="up">G</sub></span>
+            — that the event-time distribution of the uncured is exhausted before censoring
+            runs out — against the null
+            <span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub><span class="op">&#8805;</span><i>&tau;</i><sub class="up">G</sub></span>.
+          </dd>
+
+          <dt>Definition</dt>
+          <dd>
+            Let <span class="ca-m"><i>Y</i><sup class="up">*</sup></span> be the largest event
+            time and <span class="ca-m"><i>Y</i><sub class="up">max</sub></span> the largest
+            observed time, event or censored. The plateau length is the gap
+            <span class="ca-m"><i>Y</i><sub class="up">max</sub><span class="op">&minus;</span><i>Y</i><sup class="up">*</sup></span>,
+            and the window is that same width laid back from the last event:
+            <span class="ca-eq">
+              <span class="br">(</span>&#8201;2<i>Y</i><sup class="up">*</sup><span class="op">&minus;</span><i>Y</i><sub class="up">max</sub><span class="opt">,</span>&emsp;<i>Y</i><sup class="up">*</sup>&#8201;<span class="br">]</span>
+            </span>
+            With <span class="ca-m"><i>N</i><sub>n</sub></span> the number of events in that
+            window, the statistic is
+            <span class="ca-eq">
+              <i>&alpha;</i><sub>n</sub><span class="op">=</span>
+              <span class="br">(</span>1<span class="op">&minus;</span><i>N</i><sub>n</sub><span class="opt">&#8201;/&#8201;</span><i>n</i><span class="br">)</span><sup>n</sup>
+            </span>
+          </dd>
+
+          <dt>Symbols</dt>
+          <dd>
+            <div class="ca-syms">
+              <div><span class="ca-m"><i>Y</i><sup class="up">*</sup></span><span>largest observed <em>event</em> time</span></div>
+              <div><span class="ca-m"><i>Y</i><sub class="up">max</sub></span><span>largest observed time of any kind — the end of follow-up in the data</span></div>
+              <div><span class="ca-m"><i>N</i><sub>n</sub></span><span>number of events falling in the window above</span></div>
+              <div><span class="ca-m"><i>n</i></span><span>the number of subjects</span></div>
+              <div><span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub></span><span>the earliest time by which every uncured subject has had the event</span></div>
+              <div><span class="ca-m"><i>&tau;</i><sub class="up">G</sub></span><span>the latest time the censoring distribution can reach</span></div>
+            </div>
+          </dd>
+
+          <dt>Direction</dt>
+          <dd>
+            <strong>Smaller is better.</strong> A small value means many events sit inside a
+            window that is narrow relative to the observed span, which is to say the events
+            finished well before follow-up did. Large values mean events were still arriving
+            when observation stopped, and a flat tail cannot be distinguished from a study
+            that ended too early.
+          </dd>
+
+          <dt>Decision rule</dt>
+          <dd>
+            Follow-up is declared sufficient when
+            <span class="ca-m"><i>&alpha;</i><sub>n</sub><span class="op">&lt;</span>0.05</span>.
+            The threshold is the fixed level 0.05 and does not move with sample size — but
+            the statistic itself is an <span class="ca-m"><i>n</i></span>-th power, so the
+            <em>number of events</em> the rule demands is close to constant: for any
+            <span class="ca-m"><i>n</i><span class="op">&#8805;</span>4</span>, the rule is
+            satisfied exactly when three or more events fall in the window.
+          </dd>
+
+          <dt>What is implemented here</dt>
+          <dd>
+            The closed form above and the fixed 0.05 level, and nothing else. There is no
+            simulated critical-value table, no exact finite-sample calibration and no
+            bootstrap. The reading applies to one homogeneous group: it takes no covariates,
+            no strata and no treatment arms, so a dataset spanning several arms must be
+            split before it is read, never pooled.
+          </dd>
+
+          <dt>It is the same decision as the <span class="ca-m"><i>q</i><sub>n</sub></span> reading</dt>
+          <dd>
+            The two are one decision shown twice, because
+            <span class="ca-m"><i>&alpha;</i><sub>n</sub><span class="op">=</span><span class="br">(</span>1<span class="op">&minus;</span><i>q</i><sub>n</sub><span class="br">)</span><sup>n</sup></span>
+            exactly, on the same window and the same event count. The map is strictly
+            decreasing, so they cannot disagree and must never be read as two independent
+            votes. See the next block.
+          </dd>
+
+          <dt>When it cannot be computed</dt>
+          <dd>
+            When the largest observed time is an event — that is,
+            <span class="ca-m"><i>Y</i><sub class="up">max</sub><span class="op">=</span><i>Y</i><sup class="up">*</sup></span>.
+            The gap is then zero, the window collapses to a point, and there is no observed
+            stretch beyond the last event to measure. This is not a failure to converge; it
+            is the absence of the thing being measured. All three follow-up readings become
+            unavailable together, for the same reason and on exactly the same data.
+          </dd>
+
+          <dt>Source</dt>
+          <dd>
+            Maller RA, Zhou S (1994). Testing for sufficient follow-up and outliers in
+            survival data. <em>Journal of the American Statistical Association</em>,
+            89(428), 1499&ndash;1506 — their equation (5). See also Maller RA, Zhou X (1996),
+            <em>Survival Analysis with Long-Term Survivors</em>, Wiley.
+          </dd>
+
+        </dl>
+      </div>
+    </details>
+  </article>
+
+
+  <!-- ===================================================================== -->
+  <!-- 3. qn                                                                 -->
+  <!-- ===================================================================== -->
+  <article class="ca-method">
+    <h3><span class="ca-m"><i>q</i><sub>n</sub></span> statistic</h3>
+    <p class="ca-method__lead">
+      The same question as above, read on a scale that stays legible. It reports the share
+      of the sample whose events fall in that end-of-data window, rather than raising it to
+      the power <span class="ca-m"><i>n</i></span>. Larger is better here — the opposite of
+      the other two readings — and its threshold moves with sample size.
+    </p>
+
+    <details class="ca-more">
+      <summary>Definition, direction and decision rule</summary>
+      <div class="ca-more__body">
+        <dl class="ca-def">
+
+          <dt>What it measures</dt>
+          <dd>
+            The proportion of the sample whose events fall in the late window — a direct
+            reading of how many events the quiet tail is standing on. It uses the identical
+            window and the identical event count as the Maller&ndash;Zhou reading, on the
+            untransformed scale.
+          </dd>
+
+          <dt>Definition</dt>
+          <dd>
+            With <span class="ca-m"><i>Y</i><sup class="up">*</sup></span> the largest event
+            time and <span class="ca-m"><i>Y</i><sub class="up">max</sub></span> the largest
+            observed time, the window is again
+            <span class="ca-m"><span class="br">(</span>&#8201;2<i>Y</i><sup class="up">*</sup><span class="op">&minus;</span><i>Y</i><sub class="up">max</sub><span class="opt">,</span>&#8201;<i>Y</i><sup class="up">*</sup>&#8201;<span class="br">]</span></span>,
+            of width <span class="ca-m"><i>Y</i><sub class="up">max</sub><span class="op">&minus;</span><i>Y</i><sup class="up">*</sup></span>,
+            and with <span class="ca-m"><i>N</i><sub>n</sub></span> the events it contains,
+            <span class="ca-eq">
+              <i>q</i><sub>n</sub><span class="op">=</span>
+              <span class="ca-frac"><span><i>N</i><sub>n</sub></span><span><i>n</i></span></span>
+            </span>
+          </dd>
+
+          <dt>Symbols</dt>
+          <dd>
+            <div class="ca-syms">
+              <div><span class="ca-m"><i>Y</i><sup class="up">*</sup></span><span>largest observed event time</span></div>
+              <div><span class="ca-m"><i>Y</i><sub class="up">max</sub></span><span>largest observed time of any kind</span></div>
+              <div><span class="ca-m"><i>N</i><sub>n</sub></span><span>events in the window — the same count the Maller&ndash;Zhou reading uses</span></div>
+              <div><span class="ca-m"><i>n</i></span><span>the number of subjects</span></div>
+            </div>
+          </dd>
+
+          <dt>Direction</dt>
+          <dd>
+            <strong>Larger is better</strong>, and this is the one reading that runs that
+            way. A long plateau produces a wide window, a wide window captures many events,
+            and a high share of events inside it is evidence of sufficient follow-up and of
+            a genuine plateau. Small values mean events were still occurring at the end of
+            observation, which is weak evidence for a plateau whatever the curve looks like.
+          </dd>
+
+          <dt>Decision rule, and how the threshold moves with <span class="ca-m"><i>n</i></span></dt>
+          <dd>
+            Follow-up is declared sufficient when
+            <span class="ca-eq">
+              <i>q</i><sub>n</sub><span class="op">&gt;</span>1<span class="op">&minus;</span>0.05<sup class="up">1&#8201;/&#8201;<i>n</i></sup>
+            </span>
+            The threshold falls as the sample grows, because the same <em>share</em> of a
+            larger sample is a larger number of events:
+            <div class="ca-syms">
+              <div><span class="ca-m"><i>n</i><span class="op">=</span>100</span><span><span class="ca-m">0.0295</span></span></div>
+              <div><span class="ca-m"><i>n</i><span class="op">=</span>250</span><span><span class="ca-m">0.0119</span></span></div>
+              <div><span class="ca-m"><i>n</i><span class="op">=</span>500</span><span><span class="ca-m">0.0060</span></span></div>
+              <div><span class="ca-m"><i>n</i><span class="op">=</span>1000</span><span><span class="ca-m">0.0030</span></span></div>
+              <div><span class="ca-m"><i>n</i><span class="op">=</span>1404</span><span><span class="ca-m">0.0021</span></span></div>
+            </div>
+            Because
+            <span class="ca-m"><i>n</i><span class="br">(</span>1<span class="op">&minus;</span>0.05<sup class="up">1/<i>n</i></sup><span class="br">)</span><span class="op">&#8594;</span><span class="op">&minus;</span>log&#8201;0.05<span class="op">&#8776;</span>2.996</span>
+            from below, the rule reduces to the same plain statement as the reading above:
+            for any <span class="ca-m"><i>n</i><span class="op">&#8805;</span>4</span>, three or
+            more events in the window.
+          </dd>
+
+          <dt>The two readings are one decision</dt>
+          <dd>
+            The Maller&ndash;Zhou statistic and this one are algebraically the same
+            quantity. Exactly, on every dataset,
+            <span class="ca-eq">
+              <i>&alpha;</i><sub>n</sub><span class="op">=</span>
+              <span class="br">(</span>1<span class="op">&minus;</span><i>q</i><sub>n</sub><span class="br">)</span><sup>n</sup>
+              <span class="op">&#8660;</span>
+              <i>q</i><sub>n</sub><span class="op">=</span>1<span class="op">&minus;</span><i>&alpha;</i><sub>n</sub><sup class="up">1&#8201;/&#8201;<i>n</i></sup>
+            </span>
+            and since the map is strictly decreasing,
+            <span class="ca-m"><i>&alpha;</i><sub>n</sub><span class="op">&lt;</span>0.05</span>
+            holds precisely when
+            <span class="ca-m"><i>q</i><sub>n</sub><span class="op">&gt;</span>1<span class="op">&minus;</span>0.05<sup class="up">1/<i>n</i></sup></span>.
+            They cannot disagree. They are presented as two readings of one decision, on
+            two scales, and never as two independent pieces of evidence.
+          </dd>
+
+          <dt>What is implemented here — and what is not</dt>
+          <dd>
+            The rule applied is the <span class="ca-m"><i>&alpha;</i><sub>n</sub></span>-equivalent
+            one given above. The exact finite-sample critical values for
+            <span class="ca-m"><i>q</i><sub>n</sub></span> derived by Maller, Resnick and
+            Shemehsavar (2024) are <strong>not</strong> used, and neither are the simulated
+            critical-value tables of Maller &amp; Zhou (1996), which are indexed by sample
+            size, censoring proportion and a tail parameter and would require rounding all
+            three to the nearest tabulated level. The consequence is worth stating plainly:
+            with the published tables this reading would clear a substantially higher bar
+            than the threshold above, and would declare sufficient follow-up less often. The
+            <span class="ca-m"><i>q</i><sub>n</sub></span> value itself is reported and is
+            directionally informative whichever cutoff is used.
+          </dd>
+
+          <dt>When it cannot be computed</dt>
+          <dd>
+            When the largest observed time is an event,
+            <span class="ca-m"><i>Y</i><sub class="up">max</sub><span class="op">=</span><i>Y</i><sup class="up">*</sup></span>.
+            The window has zero width and there is nothing beyond the last event to
+            measure. Unavailable together with the other two follow-up readings.
+          </dd>
+
+          <dt>Source</dt>
+          <dd>
+            Maller RA, Zhou X (1996). <em>Survival Analysis with Long-Term Survivors</em>,
+            Wiley. Finite-sample and asymptotic distributions: Maller RA, Resnick S,
+            Shemehsavar S (2024). <em>Canadian Journal of Statistics</em>, 52(2),
+            359&ndash;379. The decision rule applied here is Maller RA, Zhou S (1994),
+            equation (5).
+          </dd>
+
+        </dl>
+      </div>
+    </details>
+  </article>
+
+
+  <!-- ===================================================================== -->
+  <!-- 4. SHEN                                                               -->
+  <!-- ===================================================================== -->
+  <article class="ca-method">
+    <h3>Shen statistic</h3>
+    <p class="ca-method__lead">
+      The same follow-up question, read through a deliberately narrower window. The
+      Maller&ndash;Zhou window can declare follow-up sufficient too readily; this one
+      shrinks it, so it demands that the events cluster closer to the last event. It is the
+      stricter of the two by construction, and it can never be the more optimistic.
+    </p>
+
+    <details class="ca-more">
+      <summary>Definition, direction and decision rule</summary>
+      <div class="ca-more__body">
+        <dl class="ca-def">
+
+          <dt>What it measures</dt>
+          <dd>
+            The same quantity — events in a late window, raised to the power
+            <span class="ca-m"><i>n</i></span> — but with the window rescaled by how far the
+            last event sits from the end of follow-up, which tightens it when that gap is a
+            small fraction of the observed span.
+          </dd>
+
+          <dt>Definition</dt>
+          <dd>
+            Set the weight and the estimated censoring endpoint
+            <span class="ca-eq">
+              <i>w</i><span class="op">=</span>
+              <span class="ca-frac"><span><i>Y</i><sub class="up">max</sub><span class="op">&minus;</span><i>Y</i><sup class="up">*</sup></span><span><i>Y</i><sub class="up">max</sub></span></span>
+              <span class="opt">,</span>&emsp;
+              <span class="ca-hat it">&tau;</span><sub class="up">G</sub><span class="op">=</span><i>w</i>&#8201;<i>Y</i><sup class="up">*</sup><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><i>w</i><span class="br">)</span>&#8201;<i>Y</i><sub class="up">max</sub>
+            </span>
+            The window runs from
+            <span class="ca-m"><span class="ca-hat it">&tau;</span><sub class="up">G</sub>&#8201;<i>Y</i><sup class="up">*</sup><span class="opt">&#8201;/&#8201;</span><i>Y</i><sub class="up">max</sub></span>
+            up to <span class="ca-m"><i>Y</i><sup class="up">*</sup></span>, inclusive at both
+            ends. With <span class="ca-m"><i>N</i><sub>n</sub><sup class="up">S</sup></span>
+            the events it contains,
+            <span class="ca-eq">
+              <span class="ca-hat it">&alpha;</span><sub>n</sub><span class="op">=</span>
+              <span class="br">(</span>1<span class="op">&minus;</span><i>N</i><sub>n</sub><sup class="up">S</sup><span class="opt">&#8201;/&#8201;</span><i>n</i><span class="br">)</span><sup>n</sup>
+            </span>
+          </dd>
+
+          <dt>How narrow the window is</dt>
+          <dd>
+            Write
+            <span class="ca-m"><i>&rho;</i><span class="op">=</span><i>Y</i><sup class="up">*</sup><span class="opt">&#8201;/&#8201;</span><i>Y</i><sub class="up">max</sub><span class="op">&#8712;</span><span class="br">(</span>0<span class="opt">,</span>&#8201;1<span class="br">]</span></span>.
+            Then the window is
+            <span class="ca-m"><span class="br">[</span>&#8201;<i>Y</i><sup class="up">*</sup><i>&rho;</i><span class="br">(</span>2<span class="op">&minus;</span><i>&rho;</i><span class="br">)</span><span class="opt">,</span>&#8201;<i>Y</i><sup class="up">*</sup>&#8201;<span class="br">]</span></span>,
+            of width
+            <span class="ca-m"><i>Y</i><sup class="up">*</sup><span class="br">(</span>1<span class="op">&minus;</span><i>&rho;</i><span class="br">)</span><sup class="up">2</sup></span>.
+            Against the Maller&ndash;Zhou window, whose width is
+            <span class="ca-m"><i>Y</i><sub class="up">max</sub><span class="op">&minus;</span><i>Y</i><sup class="up">*</sup></span>,
+            the ratio of widths is
+            <span class="ca-m"><i>&rho;</i><span class="br">(</span>1<span class="op">&minus;</span><i>&rho;</i><span class="br">)</span><span class="op">&#8804;</span>&#188;</span>.
+            This window is always contained in the wider one, so
+            <span class="ca-m"><i>N</i><sub>n</sub><sup class="up">S</sup><span class="op">&#8804;</span><i>N</i><sub>n</sub></span>
+            and therefore
+            <span class="ca-m"><span class="ca-hat it">&alpha;</span><sub>n</sub><span class="op">&#8805;</span><i>&alpha;</i><sub>n</sub></span>
+            on every dataset. This reading can never declare follow-up sufficient where the
+            Maller&ndash;Zhou reading does not; it can and does withhold that conclusion
+            where the other grants it.
+          </dd>
+
+          <dt>Symbols</dt>
+          <dd>
+            <div class="ca-syms">
+              <div><span class="ca-m"><i>Y</i><sup class="up">*</sup></span><span>largest observed event time</span></div>
+              <div><span class="ca-m"><i>Y</i><sub class="up">max</sub></span><span>largest observed time of any kind</span></div>
+              <div><span class="ca-m"><i>w</i></span><span>the gap as a fraction of the observed span</span></div>
+              <div><span class="ca-m"><span class="ca-hat it">&tau;</span><sub class="up">G</sub></span><span>the estimated endpoint of the censoring distribution</span></div>
+              <div><span class="ca-m"><i>&rho;</i></span><span>the last event time as a fraction of the last observed time</span></div>
+              <div><span class="ca-m"><i>N</i><sub>n</sub><sup class="up">S</sup></span><span>events in this narrower window</span></div>
+            </div>
+          </dd>
+
+          <dt>Direction</dt>
+          <dd>
+            <strong>Smaller is better</strong>, as for the Maller&ndash;Zhou reading. Small
+            values support sufficient follow-up.
+          </dd>
+
+          <dt>Decision rule</dt>
+          <dd>
+            Follow-up is declared sufficient when
+            <span class="ca-m"><span class="ca-hat it">&alpha;</span><sub>n</sub><span class="op">&lt;</span>0.05</span>.
+            The threshold is the fixed level 0.05 and does not move with sample size.
+          </dd>
+
+          <dt>What is implemented here</dt>
+          <dd>
+            The closed form above at the fixed 0.05 level. No simulated or tabulated
+            critical values, no asymptotic calibration, no bootstrap. Like the other two, it
+            reads one homogeneous group and takes no covariates or strata.
+          </dd>
+
+          <dt>When it cannot be computed</dt>
+          <dd>
+            When the largest observed time is an event,
+            <span class="ca-m"><i>Y</i><sub class="up">max</sub><span class="op">=</span><i>Y</i><sup class="up">*</sup></span>.
+            The gap is zero, so <span class="ca-m"><i>w</i><span class="op">=</span>0</span>,
+            the window collapses, and there is no stretch of follow-up beyond the last event
+            to read. Unavailable together with the other two follow-up readings, on the same
+            data and for the same reason.
+          </dd>
+
+          <dt>Source</dt>
+          <dd>
+            Shen P-S (2000). Testing for sufficient follow-up in survival data.
+            <em>Statistics &amp; Probability Letters</em>, 49(4), 313&ndash;322. In the
+            original literature this statistic is written
+            <span class="ca-m"><span class="ca-hat it">&alpha;</span><sub>n</sub></span>.
+          </dd>
+
+        </dl>
+      </div>
+    </details>
+  </article>
+
+
+  <!-- ===================================================================== -->
+  <!-- 5. RECeUS                                                             -->
+  <!-- ===================================================================== -->
+  <article class="ca-method">
+    <h3>Ratio of censored uncured subjects</h3>
+    <p class="ca-method__lead">
+      Two questions at once. Is the estimated cure fraction large enough to be worth
+      modelling, and by the end of follow-up is the group still event-free made up almost
+      entirely of cured patients rather than of patients whose event has simply not happened
+      yet? Both must hold. This is the reading the overall recommendation rests on.
+    </p>
+
+    <details class="ca-more">
+      <summary>Definition, direction and decision rule</summary>
+      <div class="ca-more__body">
+        <dl class="ca-def">
+
+          <dt>What it measures</dt>
+          <dd>
+            Not the tail of the observed curve, but two fitted quantities: the cure fraction,
+            and the share of the still-event-free mass at the end of follow-up that belongs
+            to the uncured. The second is the quantity that makes a cure fraction
+            identifiable — if almost none of the uncured are left unresolved, the plateau is
+            the cured group and not an artefact of when the study stopped.
+          </dd>
+
+          <dt>Definition</dt>
+          <dd>
+            Under the mixture
+            <span class="ca-m"><i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>&pi;</i><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><i>&pi;</i><span class="br">)</span>&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span></span>,
+            evaluated at the analysis time <span class="ca-m"><i>&tau;</i></span>, the target is
+            <span class="ca-eq">
+              <i>r</i><span class="op">=</span>
+              <span class="ca-frac">
+                <span><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span>
+                <span><i>S</i><span class="br">(</span><i>&tau;</i><span class="br">)</span></span>
+              </span>
+              <span class="op">=</span>
+              <span class="ca-frac">
+                <span><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span>
+                <span><i>&pi;</i><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><i>&pi;</i><span class="br">)</span>&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span>
+              </span>
+            </span>
+            The cure fraction and the shape parameters are estimated by maximum likelihood
+            on the right-censored sample, using the smallest-AIC cure model from screening,
+            and the estimate is the same expression at the fitted values:
+            <span class="ca-eq">
+              <span class="ca-hat it">r</span><span class="op">=</span>
+              <span class="ca-frac">
+                <span><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="opt">;</span>&#8201;<span class="ca-hat it">&theta;</span><span class="br">)</span></span>
+                <span><span class="ca-hat it">&pi;</span><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><span class="ca-hat it">&pi;</span><span class="br">)</span>&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="opt">;</span>&#8201;<span class="ca-hat it">&theta;</span><span class="br">)</span></span>
+              </span>
+            </span>
+          </dd>
+
+          <dt>Symbols</dt>
+          <dd>
+            <div class="ca-syms">
+              <div><span class="ca-m"><i>&tau;</i></span><span>the analysis time at which the ratio is read — here the largest observed follow-up time in the data</span></div>
+              <div><span class="ca-m"><span class="ca-hat it">&pi;</span></span><span>the estimated cure fraction</span></div>
+              <div><span class="ca-m"><span class="ca-hat it">&theta;</span></span><span>the estimated shape and scale of the latency distribution</span></div>
+              <div><span class="ca-m"><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span><span>the fraction of uncured subjects still event-free at <span class="ca-m"><i>&tau;</i></span> — written <span class="ca-m"><i>u</i></span> in the source paper</span></div>
+              <div><span class="ca-m"><i>S</i><span class="br">(</span><i>&tau;</i><span class="br">)</span></span><span>the fraction of the whole cohort still event-free at <span class="ca-m"><i>&tau;</i></span></span></div>
+              <div><span class="ca-m"><span class="ca-hat it">r</span></span><span>the remaining-uncured ratio: the uncured share of what is left, standardised by the cure fraction and the censoring pattern</span></div>
+            </div>
+            Two consequences follow from the definition and are worth holding on to. If the
+            cure fraction is zero then
+            <span class="ca-m"><i>r</i><span class="op">=</span>1</span> whatever the
+            follow-up, so the ratio is at its worst possible value exactly when there is
+            nothing to model. And <span class="ca-m"><i>r</i></span> is not the raw fraction
+            of uncured remaining; it is that fraction divided by the total remaining, which
+            is what lets a single threshold apply across different cure fractions and
+            censoring patterns.
+          </dd>
+
+          <dt>Direction</dt>
+          <dd>
+            For the cure fraction, <strong>larger is better</strong> — a cure fraction away
+            from zero is evidence that there is a cured group to model. For the ratio,
+            <strong>smaller is better</strong> — a small ratio means little of the uncured
+            group is still unresolved, which is evidence of sufficient follow-up. Evidence
+            <em>for</em> a cure model requires both at once.
+          </dd>
+
+          <dt>Decision rule</dt>
+          <dd>
+            A cure model is appropriate when
+            <span class="ca-eq">
+              <span class="ca-hat it">&pi;</span><span class="op">&gt;</span>0.025
+              <span class="op">&nbsp;and&nbsp;</span>
+              <span class="ca-hat it">r</span><span class="op">&lt;</span>0.05
+            </span>
+            Both thresholds are fixed constants from the source paper and do not move with
+            sample size. If the first fails, the estimated cure fraction is negligible and
+            a cure model is not supported. If the second fails, too large a share of the
+            uncured is still censored and follow-up is insufficient to estimate a cure
+            fraction reliably. Raising the ratio threshold or lowering the cure-fraction
+            threshold would declare cure models appropriate more often, both when that is
+            correct and when it is not.
+          </dd>
+
+          <dt>What is implemented here</dt>
+          <dd>
+            Point estimates only. The asymptotic normal distribution of the ratio and the
+            associated confidence interval are established in the source paper but are not
+            used in the decision — the rule compares two point estimates against two fixed
+            constants. The analysis time is fixed at the largest observed follow-up time
+            rather than a protocol-specified administrative censoring time. No sensitivity
+            analysis across thresholds is run, and no alternative model families are tried
+            once screening has chosen one. The family is always the smallest-AIC <em>cure</em>
+            family: a model without a cured group would force the cure fraction to zero and
+            the ratio to one by construction, which is a restatement of the screening result
+            rather than a second reading of it.
+          </dd>
+
+          <dt>When it cannot be computed</dt>
+          <dd>
+            When the maximum-likelihood fit for the chosen family does not converge — too
+            few events, a likelihood flat in the cure fraction, or an estimate pinned to the
+            boundary. There is then no cure fraction and no ratio, and the decision is
+            withheld rather than guessed. Unlike the three follow-up readings, this one does
+            <em>not</em> require the largest observed time to be censored, so it remains
+            available on data where those three are not.
+          </dd>
+
+          <dt>Source</dt>
+          <dd>
+            Selukar S, Othus M (2023). RECeUS: Ratio estimation of censored uncured
+            subjects, a different approach for assessing cure model appropriateness in
+            studies with long-term survivors. <em>Statistics in Medicine</em>, 42(3),
+            209&ndash;227. The thresholds are those of §2.1; the pairing with AIC model
+            screening is §2.4.
+          </dd>
+
+        </dl>
+      </div>
+    </details>
+  </article>
+
+</div>
+)---"
+
+
+# ---- §E.3 how the simulated examples are generated (R5) ---------------------
+
+# Contract copy, pasted verbatim. The numbers here and the verified generator
+# run in §D are one fact: if either changes, both change. Sample sizes, cure
+# fractions, the five analysis times and the two seeds are the values
+# builder-sims verified against the regenerated files.
+.DOCS_SIMULATION_HTML <- r"---(
+<div class="ca-section">
+  <h2 class="ca-section__title">How the simulated examples are generated</h2>
+
+  <p class="ca-method__lead">
+    Every simulated example comes from the same model the method was published with, so
+    its behaviour under each reading is known in advance. Each one is produced by
+    committed code from a fixed seed and is reproducible exactly.
+  </p>
+
+  <details class="ca-more">
+    <summary>The generating model</summary>
+    <div class="ca-more__body">
+      <dl class="ca-def">
+
+        <dt>Event times</dt>
+        <dd>
+          Each patient is either cured — with probability <span class="ca-m"><i>&pi;</i></span>,
+          and then never has the event — or uncured, in which case the event time is drawn
+          from a Weibull distribution with shape 2 and scale 1. The cohort survival
+          function is therefore
+          <span class="ca-eq">
+            <i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>&pi;</i><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><i>&pi;</i><span class="br">)</span>&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span>
+          </span>
+        </dd>
+
+        <dt>Cure fractions</dt>
+        <dd>
+          <span class="ca-m"><i>&pi;</i></span> takes the values 0, 0.10, 0.30, 0.50, 0.60
+          and 0.90. The value 0 is included deliberately: with no cured group at all, a
+          correct assessment must decline a cure model at every length of follow-up.
+        </dd>
+
+        <dt>Length of follow-up</dt>
+        <dd>
+          Follow-up is set not in time units but by how much of the uncured group is left
+          unresolved when the study stops. Write
+          <span class="ca-m"><i>u</i><span class="op">=</span><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span>
+          for the fraction of uncured patients still event-free at the analysis time. The
+          analysis time <span class="ca-m"><i>&tau;</i></span> is chosen to hit each target
+          <span class="ca-m"><i>u</i></span> in 0.25, 0.10, 0.05, 0.01 and 0.001 — the
+          75th, 90th, 95th, 99th and 99.9th percentiles of the uncured distribution — then
+          rounded to the nearest quarter so the analysis lands at a plausible calendar
+          point. That gives analysis dates of 1.25, 1.50, 1.75, 2.25 and 2.75. This
+          parameterisation makes follow-up comparable across settings.
+        </dd>
+
+        <dt>Accrual and censoring</dt>
+        <dd>
+          Patients enter uniformly over an accrual period,
+          <span class="ca-m"><i>A</i><span class="op">~</span>Unif<span class="br">(</span>0<span class="opt">,</span>&#8201;0.5887<span class="br">)</span></span>,
+          the accrual end being half the 75th percentile of the uncured distribution.
+          Everyone is followed to the common analysis time
+          <span class="ca-m"><i>&tau;</i></span>, so the recorded pair is
+          <span class="ca-eq">
+            <i>Y</i><span class="op">=</span>min<span class="br">(</span><i>T</i><span class="opt">,</span>&#8201;<i>&tau;</i><span class="op">&minus;</span><i>A</i><span class="br">)</span>
+            <span class="opt">,</span>&emsp;
+            <i>D</i><span class="op">=</span><span class="br">1</span><span class="br">&#123;</span><i>T</i><span class="op">&#8804;</span><i>&tau;</i><span class="op">&minus;</span><i>A</i><span class="br">&#125;</span>
+          </span>
+          and late entrants are censored earlier — the administrative censoring pattern of
+          a real trial. One example adds random loss to follow-up on top of that.
+        </dd>
+
+        <dt>Sample sizes and seed</dt>
+        <dd>
+          <span class="ca-m"><i>n</i></span> takes the values 50, 250, 400, 500 and 1000,
+          and 300 for the four original examples. Everything is drawn once from seed 2026,
+          and seed 11 for those four, so the numbers on this screen are the same for
+          everyone, every time. Re-running the data-generation script in the project's
+          data-raw folder regenerates every file and re-checks that each one still
+          produces the verdict it is listed with.
+        </dd>
+
+        <dt>Coverage</dt>
+        <dd>
+          The set spans the corners deliberately: no cure fraction with short follow-up, no
+          cure fraction with long follow-up, a substantial cure fraction with short
+          follow-up, and a substantial cure fraction with long follow-up. Three examples
+          are generated so that the largest observed time is an <em>event</em> rather than a
+          censored observation, which is the case in which all three follow-up readings are
+          unavailable — they are included so the behaviour can be seen rather than
+          described. The four original examples predate this design and use a flat
+          follow-up limit with no staggered entry.
+        </dd>
+
+        <dt>Source of the design</dt>
+        <dd>
+          Selukar S, Othus M (2023), §3.1. The built-in real datasets are public and
+          de-identified; where a dataset spans several treatment arms it is restricted to
+          one arm, because every reading here applies to a single homogeneous group.
+        </dd>
+
+      </dl>
+    </div>
+  </details>
+</div>
+)---"
+
+
+# ---- §E.4 the glossary ------------------------------------------------------
+
+# Contract copy, pasted verbatim; replaces the nine-entry list with thirteen
+# entries ordered so each term is defined after the terms it depends on. The
+# "Immunes" entry is cut under S10 (no immune branding anywhere on screen); the
+# two ideas it carried — that cure is a latent status, and that the label
+# describes a shape in the data rather than a clinical promise — are folded
+# into the "Cure fraction" entry.
+.DOCS_GLOSSARY_HTML <- r"---(
+<dl class="ca-def">
+
+  <dt>Mixture cure model</dt>
+  <dd>
+    A model treating the cohort as a mixture of subjects not susceptible to the event and
+    subjects susceptible to it, so that
+    <span class="ca-m"><i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>&pi;</i><span class="op">+</span><span class="br">(</span>1<span class="op">&minus;</span><i>&pi;</i><span class="br">)</span>&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span></span>.
+    As <span class="ca-m"><i>t</i></span> grows the curve levels off at
+    <span class="ca-m"><i>&pi;</i></span> rather than at zero.
+  </dd>
+
+  <dt>Cure fraction, <span class="ca-m"><i>&pi;</i></span></dt>
+  <dd>
+    The proportion of the population not susceptible to the event of interest. On a
+    Kaplan&ndash;Meier plot it is the height at which the curve would settle. Cure is a
+    latent status — no subject is observed to be cured — so the term describes a shape in
+    the data, not a clinical promise.
+  </dd>
+
+  <dt>Susceptibles, or uncured</dt>
+  <dd>
+    The subjects who will experience the event if followed long enough. Their share of the
+    population is <span class="ca-m">1<span class="op">&minus;</span><i>&pi;</i></span>.
+  </dd>
+
+  <dt>Latency distribution, <span class="ca-m"><i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span></span></dt>
+  <dd>
+    The survival function of the event times among the uncured alone. It falls from 1 to 0;
+    all the levelling-off in the cohort curve comes from the cure fraction, never from this.
+  </dd>
+
+  <dt>Right-censoring</dt>
+  <dd>
+    A subject whose event was never observed: the record says only that the event had not
+    occurred when observation stopped. Loss to follow-up, withdrawal and the administrative
+    end of the study all produce right-censored records.
+  </dd>
+
+  <dt>Administrative censoring</dt>
+  <dd>
+    Censoring caused by the analysis happening at a fixed calendar time
+    <span class="ca-m"><i>&tau;</i></span>, so that a subject accrued at time
+    <span class="ca-m"><i>A</i></span> is observed for at most
+    <span class="ca-m"><i>&tau;</i><span class="op">&minus;</span><i>A</i></span>. Late
+    entrants are censored earliest.
+  </dd>
+
+  <dt>Plateau</dt>
+  <dd>
+    The flat run above zero at the right-hand end of a Kaplan&ndash;Meier estimate. It is
+    the visual signature of a cure fraction, and it is also what heavy censoring produces
+    when the cure fraction is in fact zero. Distinguishing the two is the whole problem.
+  </dd>
+
+  <dt><span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub></span> and <span class="ca-m"><i>&tau;</i><sub class="up">G</sub></span></dt>
+  <dd>
+    The earliest time by which the event-time distribution of the uncured reaches 1 — every
+    susceptible subject has had the event — and the corresponding endpoint of the censoring
+    distribution. The classical condition for assessing a cure fraction is
+    <span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub><span class="op">&lt;</span><i>&tau;</i><sub class="up">G</sub></span>:
+    the longest event times of the uncured must not be hidden by censoring.
+  </dd>
+
+  <dt>Sufficient follow-up</dt>
+  <dd>
+    Observation continued past the point at which the uncured were exhausted, so the
+    subjects still event-free at the end are the cured ones. With shorter follow-up a cured
+    subject and a subject who would relapse next year leave identical records, and no
+    estimator can separate them.
+  </dd>
+
+  <dt>Proportion of uncured remaining, <span class="ca-m"><i>u</i></span></dt>
+  <dd>
+    <span class="ca-m"><i>u</i><span class="op">=</span><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span>,
+    the fraction of susceptible subjects who have not yet had the event at the analysis
+    time. It is latent and cannot be observed; it is how the length of follow-up is
+    parameterised in simulation, and 0.1&ndash;0.2% is the conventional standard for
+    follow-up long enough to fit a cure model in practice.
+  </dd>
+
+  <dt>Remaining-uncured ratio, <span class="ca-m"><i>r</i></span></dt>
+  <dd>
+    <span class="ca-m"><i>u</i></span> standardised by the total still event-free at the
+    analysis time,
+    <span class="ca-m"><i>r</i><span class="op">=</span><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span><span class="opt">&#8201;/&#8201;</span><i>S</i><span class="br">(</span><i>&tau;</i><span class="br">)</span></span>.
+    The standardisation absorbs the cure fraction and the censoring pattern, so one
+    threshold serves across settings. It equals 1 when the cure fraction is zero.
+  </dd>
+
+  <dt>Largest event time and largest observed time</dt>
+  <dd>
+    <span class="ca-m"><i>Y</i><sup class="up">*</sup></span> and
+    <span class="ca-m"><i>Y</i><sub class="up">max</sub></span>. The gap between them is the
+    observed stretch of follow-up beyond the last event, and it is the raw material of all
+    three follow-up readings. When the gap is zero, none of them exists.
+  </dd>
+
+  <dt>AIC</dt>
+  <dd>
+    Akaike's information criterion,
+    <span class="ca-m">2<i>k</i><span class="op">&minus;</span>2&#8201;log&#8201;<span class="ca-hat it">L</span></span>:
+    a ranking of how well each candidate describes the data at hand, penalised for the
+    number of free parameters. Smaller is better; there is no threshold and it is not a test.
+  </dd>
+
+</dl>
+)---"
+
+
+# ---- panel: data and ethics -------------------------------------------------
+
+# The count is the registry's: nineteen built-in examples, three of them real
+# trial data and sixteen simulated (§D.1).
+.DOCS_DATA_ETHICS <- c(
+  "The built-in examples are public, de-identified datasets, plus sixteen simulated scenarios generated in this repository. No patient-identifiable data ships with this app.",
+  "A file you upload is read into this session on this machine only. Nothing is transmitted and nothing is written to disk."
 )
 
-# [SIGN-OFF: G] the six *Direction* lines are the highest-risk copy in the app
-# (R13). Review them against the package source, not against the docs.
 
-#' Render one method explainer as an accordion panel, with the control that
-#' navigates to the tab where the method's own card lives.
-.docs_method_panel <- function(ns, m) {
-  bslib::accordion_panel(
-    title = m$title,
-    value = m$key,
-    htmltools::tags$dl(
-      class = "ca-card__body",
-      lapply(m$lines, function(ln) {
-        htmltools::tagList(
-          htmltools::tags$dt(htmltools::tags$em(ln[[1]])),
-          htmltools::tags$dd(ln[[2]])
-        )
-      })
-    ),
-    actionButton(ns(paste0("go_", m$key)), m$target_label)
-  )
-}
+# ---- references -------------------------------------------------------------
 
-
-# ---- the glossary -----------------------------------------------------------
-
-# Definitions assembled from docs/cure-models-101.md sections 3, 4 and 12 and
-# from contract §J.9 and §J.2. No definition is written fresh here.
-# [SIGN-OFF: G] the ten glossary entries, and in particular the tau_F0 / tau_G
-# wording, which is the one place the app names a quantity no package field
-# returns.
-.DOCS_GLOSSARY <- list(
-  c("Mixture cure model",
-    "A model that says some patients will never have the event: S(t) = (1 − p) + p·Su(t), where p is the share who remain at risk and Su(t) is the survival function of the uncured group only. As t grows, Su(t) heads to 0 and S(t) approaches 1 − p: the curve does not go to zero, it levels off at the cure fraction."),
-  c("Cure fraction",
-    "The proportion of the population that is cured, 1 − p. On a Kaplan-Meier plot it is the height of the plateau. RECeUS estimates it as π̂, and the app's “tail level S” is the closely related Kaplan-Meier level at the end of follow-up — close to π̂ but not the same number."),
-  c("Susceptible / uncured",
-    "The patients who are not cured and will have the event if followed long enough. The literature uses “susceptible” and “uncured” interchangeably; p is their share of the population."),
-  c("Immune",
-    "The older literature's word for the cured group, and the reason immune.test() is called what it is. Despite the name it is a descriptive summary, not a hypothesis test. “Cure” is a statistical label for a shape in the data, not a clinical promise — for a mortality endpoint read it as long-term survivorship, not as literal immunity."),
-  c("Plateau",
-    "The flat run above zero at the right-hand end of a Kaplan-Meier curve. It is the visual signature of a cure fraction — and also what heavy censoring produces in data with a true cure fraction of exactly zero. A plateau is a hypothesis, not a finding."),
-  c("Censoring",
-    "A subject whose event was never observed: all the data record is that the event had not happened by the time the study stopped watching them. In a prepared dataset the status column is 1 for an event and 0 for a censored observation."),
-  c("Right-censoring",
-    "The form of censoring assumed throughout this app: observation stops at some time and the event, if it ever happens, happens after that. Dropout, loss to follow-up and the administrative end of the study all produce right-censored records."),
-  c("Sufficient follow-up",
-    "The study kept observing patients past the moment the uncured group was exhausted. Only then can you say the people still event-free at the end are the cured ones, because everyone who was going to have an event already had it. If follow-up is too short, a cured patient and an uncured patient who would have relapsed next year produce identical records, and no estimator can separate them."),
-  c("tau_F0 and tau_G",
-    "The two times the classical sufficient-follow-up condition compares. tau_F0 is the last time at which the uncured can still have events — the time by which all susceptible patients would have had the event. tau_G is the end of follow-up, the last time the study is still observing anybody. Sufficient follow-up is the condition tau_F0 ≤ tau_G: the uncured run out of events before the study runs out of observation. Neither quantity is returned by any package field; the diagnostics test the condition indirectly, through the gap between the last event and the end of follow-up."),
-  c("AIC (Akaike information criterion)",
-    "A ranking of how well each candidate model describes the data you have. Smaller is better, there is no threshold, and it is not a test. A better AIC fit is not evidence that a cure model is identifiable: AIC asks how well a model describes the data you have; identifiability asks whether the data contain enough follow-up to pin the cure fraction down.")
+# A plain list, and the last thing on the page. Eleven entries, in this order.
+# This list and the package-link block beside the QR code are the only C1
+# exemptions in the app. Entries 6, 7 and 10 supported the deleted "If
+# follow-up is too short" panel and stay: the list is now the tab's only
+# bibliographic record, and a reference costs no visible words (§E.5.1).
+.DOCS_REFERENCES <- c(
+  "Maller RA, Zhou S (1992). Estimating the proportion of immunes in a censored sample. Biometrika, 79(4), 731\u2013739. doi:10.1093/biomet/79.4.731",
+  "Maller RA, Zhou S (1994). Testing for sufficient follow-up and outliers in survival data. Journal of the American Statistical Association, 89(428), 1499\u20131506. doi:10.1080/01621459.1994.10476889",
+  "Maller RA, Zhou S (1995). Testing for the presence of immune or cured individuals. Biometrics, 51, 1197\u20131205. doi:10.2307/2533253",
+  "Maller RA, Zhou X (1996). Survival Analysis with Long-Term Survivors. Wiley.",
+  "Shen P-S (2000). Testing for sufficient follow-up in survival data. Statistics & Probability Letters, 49(4), 313\u2013322. doi:10.1016/S0167-7152(00)00063-8",
+  "Escobar-Bach M, Van Keilegom I (2019). Non-parametric cure rate estimation under insufficient follow-up by using extremes. Journal of the Royal Statistical Society Series B, 81(5), 861\u2013880.",
+  "Othus M, Bansal A, Koepl L, Wagner S, Ramsey S (2020). Bias in mean survival from fitting cure models with limited follow-up. Value in Health, 23(8), 1034\u20131039.",
+  "Selukar S, Othus M (2023). RECeUS: Ratio estimation of censored uncured subjects, a different approach for assessing cure model appropriateness in studies with long-term survivors. Statistics in Medicine, 42(3), 209\u2013227. doi:10.1002/sim.9610",
+  "Maller RA, Resnick S, Shemehsavar S (2024). Finite sample and asymptotic distributions of a statistic for sufficient follow-up in cure models. Canadian Journal of Statistics, 52(2), 359\u2013379. doi:10.1002/cjs.11771",
+  "Yuen TP, Musta E (2024). Testing for sufficient follow-up in survival data with a cure fraction. arXiv:2403.16832.",
+  "Mudunkotuwa G, Ghosh D, Triplett B, Selukar S. A Tutorial for Evaluating Cure Model Appropriateness (in preparation)."
 )
 
 
-# ---- FAQ / troubleshooting --------------------------------------------------
+# =============================================================================
+# SECTIONS — the one shared entry point (§F.3)
+# =============================================================================
 
-.DOCS_FAQ <- list(
-  list(
-    q = "Three diagnostic cards say “Cannot be computed”. Is the app broken?",
-    a = list(
-      "No. Cannot be computed — the longest observed time is an event, so there is no plateau to test.",
-      "This is a property of the data, not an error. All three follow-up tests need follow-up to extend past the last event. Maller–Zhou, qn and Shen share that single gate, so they always go dark together. The immune summary and RECeUS still render, because neither depends on the gap."
-    )
-  ),
-  list(
-    q = "A non-cure model won on AIC, but the five diagnostics still appeared. Why?",
-    a = list(
-      "Because the app always calls cure.appropriateness() with run_tests = \"yes\", so the diagnostics run whichever model wins the AIC comparison.",
-      "They answer a different question. AIC ranks how well each candidate describes the data you already have; the diagnostics ask whether the data contain enough follow-up to identify a cure fraction at all. A non-cure model winning on AIC is worth knowing, and it is not a reason to hide the follow-up evidence."
-    )
-  ),
-  list(
-    q = "I ticked “include lognormal” and the conclusion changed. Which run is right?",
-    a = list(
-      "Both are honest runs; they use different candidate sets. The package's own note explains the mechanism: the lognormal distribution has a heavy tail that can substantially change the RECeUS remaining-uncured ratio and the selected model, so it is opt-in.",
-      "RECeUS is fitted under the distribution implied by the selected model, so adding a heavy-tailed candidate that then wins the AIC comparison can move π̂ and r̂, and with them the decision. If the two runs disagree, that instability is itself the finding, and it is worth reporting rather than picking the more convenient of the two."
-    )
-  ),
-  list(
-    q = "Maller–Zhou and qn never disagree with each other. Is one of them redundant?",
-    a = list(
-      "On the datasets in this app they count events in the identical window, so the two statistics are the same underlying count presented two ways and can never split.",
-      "Treat them as one piece of evidence, not two. Two chips agreeing is not independent confirmation, which is exactly why the Conclusion tab tallies chips rather than scoring them."
-    )
-  ),
-  list(
-    q = "I moved α and the headline verdict did not move. Is the slider working?",
-    a = list(
-      "Yes. α is an argument of mz.test() and shen.test(), and it also sets the app-computed qn threshold, so those three chips respond to it.",
-      "The headline verdict comes from RECeUS, whose two cutoffs — 0.025 on π̂ and 0.05 on r̂ — are literals inside the package and are reachable by no argument. No slider in this app can move them."
-    )
-  ),
-  list(
-    q = "The assessment failed with an error.",
-    a = list(
-      "The assessment could not be completed. This usually means the maximum-likelihood fit behind RECeUS did not converge on this dataset.",
-      "The package's verbatim message is shown under the error on the Quantitative tab. Try a different RECeUS distribution, or press Run assessment again after changing the candidate set."
-    )
-  ),
-  list(
-    q = "My CSV would not load.",
-    a = list(
-      "The Data tab names the exact problem — a non-comma delimiter, a ragged row, a non-numeric time column, or an event level matching no rows — and says what to change.",
-      "Two things are worth checking first: the file must be comma-separated with a header row, and the value you pick for “which value means the event” must actually occur in the status column."
-    )
-  ),
-  list(
-    q = "Why does the app refuse a dataset with no events?",
-    a = list(
-      "This dataset has no events (or too few rows) to assess. Cure-model diagnostics need both events and censored observations.",
-      "With zero events the follow-up statistics degenerate rather than fail loudly, so the app stops before calling the package at all."
-    )
-  )
-)
-
-
-# ---- the provenance table ---------------------------------------------------
-
-# Every displayed statistic, with the field it came from. Values read live from
-# state; before an assessment each value column reads "— not yet computed —".
-.DOCS_PROVENANCE <- list(
-  c("Best model by AIC",            "$screening$best_model"),
-  c("Best model type",              "$screening$best_model_type"),
-  c("RECeUS distribution",          "$selected_receus_dist"),
-  c("Maller–Zhou statistic",    "$tests$mz$statistic"),
-  c("qn statistic",                 "$tests$qn$statistic"),
-  c("Shen statistic",               "$tests$shen$statistic"),
-  c("Last observation censored",    "$tests$immune$last_observation_censored"),
-  c("Censoring proportion",         "$tests$immune$p_cens"),
-  c("RECeUS pi_hat",                "$tests$receus$pi_hat"),
-  c("RECeUS r_hat",                 "$tests$receus$r_hat"),
-  c("RECeUS tau",                   "$tests$receus$tau"),
-  c("RECeUS decision",              "$tests$receus$decision")
-)
-
-#' Pull one provenance value out of `state$assess` by its field path.
+#' Every Documentation section, in reading order, with no page chrome.
 #'
-#' Walks the `$a$b$c` path literally so the table and the code agree by
-#' construction. Returns the not-yet-computed dash before an assessment.
-.docs_provenance_value <- function(state, path) {
-  if (is.null(state$assess)) return("— not yet computed —")
-  parts <- strsplit(sub("^\\$", "", path), "$", fixed = TRUE)[[1]]
-  v <- state$assess
-  for (p in parts) {
-    if (is.null(v) || is.null(v[[p]])) return(ca_dash())
-    v <- v[[p]]
-  }
-  if (is.logical(v) && length(v) == 1L) return(if (isTRUE(v)) "TRUE" else "FALSE")
-  if (is.numeric(v) && length(v) == 1L) return(ca_num(v, 4))
-  if (is.character(v) && length(v) == 1L && nzchar(v)) return(v)
-  ca_dash()
+#' Order is fixed by §E.5.2: the method blocks, the simulated-data section and
+#' the glossary all sit above the QR block and the reference list, and nothing
+#' is rendered after the reference list.
+#'
+#' The depth sits behind closed disclosures: the three checks, the glossary and
+#' the data-and-ethics note are closed accordion panels, and every method's
+#' definitions, symbols, thresholds and limits are behind a closed
+#' <details class="ca-more">. Only the lead paragraphs are visible by default.
+#'
+#' @return an htmltools::tagList, safe to drop into any container.
+ca_docs_sections <- function() {
+
+  htmltools::tagList(
+
+    htmltools::div(
+      class = "ca-section",
+      bslib::accordion(
+        open = FALSE, multiple = TRUE,
+        bslib::accordion_panel(
+          title = "The three checks", value = "checks",
+          htmltools::tags$div(
+            class = "ca-card__body",
+            lapply(.DOCS_CHECKS, function(s) {
+              htmltools::tags$p(htmltools::tags$strong(s[[1]]), " \u2014 ", s[[2]])
+            })
+          )
+        )
+      )
+    ),
+
+    # §E.2 — the five readings, in the order the assessment applies them.
+    htmltools::HTML(.DOCS_METHODS_HTML),
+
+    # §E.3 — R5.
+    htmltools::HTML(.DOCS_SIMULATION_HTML),
+
+    htmltools::div(
+      class = "ca-section",
+      bslib::accordion(
+        open = FALSE, multiple = TRUE,
+
+        bslib::accordion_panel(
+          title = "Glossary", value = "glossary",
+          # §E.4 — thirteen entries, in dependency order.
+          htmltools::HTML(.DOCS_GLOSSARY_HTML)
+        ),
+
+        bslib::accordion_panel(
+          title = "Data and ethics", value = "data_ethics",
+          htmltools::tags$div(
+            class = "ca-card__body",
+            lapply(.DOCS_DATA_ETHICS, htmltools::tags$p)
+          )
+        )
+      )
+    ),
+
+    # The QR block, immediately above References. The target is CA_PACKAGE_URL
+    # (helpers.R) and is hard-coded nowhere else; the label says "the package"
+    # because the CRAN submission is still pending.
+    htmltools::div(
+      class = "ca-section",
+      htmltools::div(
+        class = "ca-qr",
+        htmltools::tags$a(
+          href = CA_PACKAGE_URL, target = "_blank", rel = "noopener",
+          htmltools::tags$img(
+            src = "img/cureassess-qr.svg", class = "ca-qr__img",
+            alt = "QR code linking to the package."
+          )
+        ),
+        htmltools::tags$div(
+          # The package name is spelled out only in the reference list; here the
+          # QR link beside this line already identifies what is attributed.
+          htmltools::tags$p("MIT licensed. Authors Geethanjalee Mudunkotuwa and Durbadal Ghosh."),
+          htmltools::tags$p("Scan for the package.")
+        )
+      )
+    ),
+
+    # LAST. Nothing is rendered below this (§E.5.2).
+    htmltools::div(
+      class = "ca-section",
+      htmltools::tags$h2(class = "ca-section__title", "References"),
+      htmltools::tags$ul(lapply(.DOCS_REFERENCES, htmltools::tags$li))
+    )
+  )
 }
 
 
@@ -270,6 +1078,10 @@
 # =============================================================================
 
 #' Documentation tab UI. Static; renders at every status, including "empty".
+#'
+#' The tab's chrome is the page title and one lede line; everything else is
+#' ca_docs_sections(). Nothing is clickable except the QR link, the accordion
+#' titles and the disclosure summaries.
 mod_docs_ui <- function(id) {
   ns <- NS(id)
 
@@ -277,192 +1089,14 @@ mod_docs_ui <- function(id) {
 
     htmltools::div(
       class = "ca-section",
-      htmltools::h2(class = "ca-section__title", "Documentation"),
-      htmltools::p(
+      htmltools::tags$h1(class = "ca-section__title", "Documentation"),
+      htmltools::tags$p(
         class = "ca-lede",
-        "What each test and method is about, in the order you meet them; a glossary; the worked readings; the references; and what to do when something goes wrong."
-      ),
-      ca_card(
-        title = "What this app does",
-        body = htmltools::tagList(
-          htmltools::tags$p(
-            "It walks a dataset through the published two-stage check for whether a cure model is appropriate — Kaplan-Meier plus AIC model comparison, then five follow-up and cure-fraction diagnostics — and returns a plain-language verdict."
-          ),
-          htmltools::tags$p(
-            "The published check has three steps: ① expert judgment → ② visual assessment → ③ quantitative assessment. This app automates ② and ③. Step ① is a human conversation it must never decide."
-          ),
-          htmltools::tags$p(htmltools::tags$strong(
-            "Failing any one step means a cure model is inappropriate. This is a conjunction, not a score."
-          ))
-        )
-      ),
-      ca_note(
-        "info",
-        "What this app does not do",
-        htmltools::tags$p(
-          "This app assesses whether a cure model is ",
-          htmltools::tags$em("appropriate"),
-          ". It does not fit your final analysis model, and it does not produce treatment-effect estimates."
-        )
+        "This app decides whether a cure model is appropriate for right-censored survival data. It does not fit your final model and it does not estimate treatment effects."
       )
     ),
 
-    htmltools::div(
-      class = "ca-section",
-      htmltools::h3(class = "ca-section__title", "The six methods, one at a time"),
-      htmltools::p(
-        class = "ca-lede",
-        "Five diagnostics and the AIC screening step that precedes them. Each panel gives the question the method answers, the direction of “good”, where its threshold comes from, when it cannot be computed, the exact call and field, and the reference."
-      ),
-      do.call(
-        bslib::accordion,
-        c(
-          lapply(.DOCS_METHODS, function(m) .docs_method_panel(ns, m)),
-          list(open = FALSE, multiple = TRUE)
-        )
-      )
-    ),
-
-    htmltools::div(
-      class = "ca-section",
-      htmltools::h3(class = "ca-section__title", "Worked readings"),
-      htmltools::p(
-        class = "ca-lede",
-        "Three curated datasets, each read twice — once off the curve, once off the numbers."
-      ),
-      bslib::accordion(
-        open = FALSE, multiple = TRUE,
-        bslib::accordion_panel(
-          title = .qual_worked_title("nwtco"), value = "wr_nwtco",
-          .qual_worked_reading("nwtco")
-        ),
-        bslib::accordion_panel(
-          title = .qual_worked_title("gbsg"), value = "wr_gbsg",
-          .qual_worked_reading("gbsg")
-        ),
-        bslib::accordion_panel(
-          title = .qual_worked_title("colon"), value = "wr_colon",
-          .qual_worked_reading("colon")
-        )
-      ),
-      actionButton(ns("go_worked"), "Look at a curve on the Qualitative tab →")
-    ),
-
-    htmltools::div(
-      class = "ca-section",
-      htmltools::h3(class = "ca-section__title", "Glossary"),
-      htmltools::tags$dl(
-        class = "ca-card__body",
-        lapply(.DOCS_GLOSSARY, function(g) {
-          htmltools::tagList(
-            htmltools::tags$dt(htmltools::tags$strong(g[[1]])),
-            htmltools::tags$dd(g[[2]])
-          )
-        })
-      )
-    ),
-
-    htmltools::div(
-      class = "ca-section",
-      htmltools::h3(class = "ca-section__title", "Where the numbers on screen come from"),
-      htmltools::p(
-        class = "ca-lede",
-        "Every statistic in this app is a field of the single cure.appropriateness() result. Nothing in this table was computed in app code."
-      ),
-      uiOutput(ns("provenance"))
-    ),
-
-    htmltools::div(
-      class = "ca-section",
-      htmltools::h3(class = "ca-section__title", "FAQ and troubleshooting"),
-      do.call(
-        bslib::accordion,
-        c(
-          lapply(seq_along(.DOCS_FAQ), function(i) {
-            f <- .DOCS_FAQ[[i]]
-            bslib::accordion_panel(
-              title = f$q, value = paste0("faq_", i),
-              lapply(f$a, htmltools::tags$p)
-            )
-          }),
-          list(open = FALSE, multiple = TRUE)
-        )
-      )
-    ),
-
-    htmltools::div(
-      class = "ca-section",
-      htmltools::h3(class = "ca-section__title", "References"),
-      ca_card(
-        title = "The four key references",
-        lede = "Each with the DOI printed in the package documentation.",
-        body = htmltools::tags$ul(
-          htmltools::tags$li("Maller RA, Zhou S (1992). Estimating the proportion of immunes in a censored sample. Biometrika, 79(4), 731–739. doi:10.1093/biomet/79.4.731"),
-          htmltools::tags$li("Maller RA, Zhou S (1994). Testing for sufficient follow-up and outliers in survival data. Journal of the American Statistical Association, 89(428), 1499–1506. doi:10.1080/01621459.1994.10476889"),
-          htmltools::tags$li("Shen P-S (2000). Testing for sufficient follow-up in survival data. Statistics & Probability Letters, 49(4), 313–322. doi:10.1016/S0167-7152(00)00063-8"),
-          htmltools::tags$li("Selukar S, Othus M (2023). RECeUS: Ratio estimation of censored uncured subjects, a different approach for assessing cure model appropriateness in studies with long-term survivors. Statistics in Medicine, 42(3), 209–227. doi:10.1002/sim.9610")
-        )
-      ),
-      ca_card(
-        title = "Background cited in the package source",
-        body = htmltools::tags$ul(
-          htmltools::tags$li("Maller RA, Zhou S (1995). Testing for the presence of immune or cured individuals. Biometrics, 51, 1197–1205. doi:10.2307/2533253"),
-          htmltools::tags$li("Maller RA, Zhou X (1996). Survival Analysis with Long-Term Survivors. Wiley."),
-          htmltools::tags$li("Maller RA, Resnick S, Shemehsavar S (2024). Finite sample and asymptotic distributions of a statistic for sufficient follow-up in cure models. Canadian Journal of Statistics, 52(2), 359–379. doi:10.1002/cjs.11771")
-        )
-      ),
-      ca_card(
-        title = "If follow-up looks insufficient",
-        lede = "The references behind routes 2, 3 and 4 on the Conclusion tab.",
-        body = htmltools::tagList(
-          htmltools::tags$ul(
-            htmltools::tags$li("Escobar-Bach M, Van Keilegom I (2019). Non-parametric cure rate estimation under insufficient follow-up by using extremes. Journal of the Royal Statistical Society Series B, 81(5), 861–880."),
-            htmltools::tags$li("Yuen TP, Musta E (2024). Testing for sufficient follow-up in survival data with a cure fraction. arXiv:2403.16832."),
-            htmltools::tags$li("Othus M, Bansal A, Koepl L, Wagner S, Ramsey S (2020). Bias in mean survival from fitting cure models with limited follow-up. Value in Health, 23(8), 1034–1039.")
-          ),
-          actionButton(ns("go_conclusion"), "See the four routes on the Conclusion tab →")
-        )
-      ),
-      ca_card(
-        title = "The tutorial manuscript",
-        body = htmltools::tags$p(
-          "“A Tutorial for Evaluating Cure Model Appropriateness” — Mudunkotuwa, Ghosh, Triplett, Selukar (in preparation). This app operationalises its Figure 1 workflow. The manuscript is not distributed with this repository."
-        )
-      ),
-      ca_card(
-        title = "The package, how to cite, and licence",
-        body = htmltools::tagList(
-          htmltools::tags$p(
-            "cureAssess, MIT licensed; authors Geethanjalee Mudunkotuwa (author, creator, copyright holder) and Durbadal Ghosh (author). Upstream ",
-            htmltools::tags$span(class = "ca-mono", "https://github.com/GeethanjaleeM/cureAssess"),
-            ", vendored in this repository at ",
-            htmltools::tags$span(class = "ca-mono", "cureAssess/"),
-            ". This app is a front end; every statistic is the package's."
-          ),
-          uiOutput(ns("version_line")),
-          htmltools::tags$p(
-            htmltools::tags$strong("How to cite."),
-            " Cite the package with ",
-            htmltools::tags$span(class = "ca-mono", "citation(\"cureAssess\")"),
-            " in R, and cite the tutorial manuscript above for the workflow this app implements."
-          ),
-          htmltools::tags$p(
-            htmltools::tags$strong("Licence."),
-            " The package is MIT. The app's licence is the repository's LICENSE.md."
-          ),
-          htmltools::tags$p(
-            htmltools::tags$strong("Data note."),
-            " The built-in examples are public or simulated data only, with provenance and licence for each in data/examples/README.md. No restricted or identifiable data is in this repository."
-          )
-        )
-      )
-    ),
-
-    htmltools::div(
-      class = "ca-section",
-      actionButton(ns("to_intro"), "Back to the Intro →"),
-      actionButton(ns("to_data"), "Go to Data →")
-    )
+    ca_docs_sections()
   )
 }
 
@@ -471,56 +1105,13 @@ mod_docs_ui <- function(id) {
 # SERVER
 # =============================================================================
 
-#' Documentation tab server. Writes nothing to `state`; reads `state$assess`
-#' only for the provenance table.
+#' Documentation tab server.
+#'
+#' Nothing to do: the tab is static, it writes nothing to `state`, it reads
+#' nothing from `state`, and it has no controls. `state` and `go_to` stay in the
+#' signature because the module contract fixes it.
 mod_docs_server <- function(id, state, go_to) {
   moduleServer(id, function(input, output, session) {
-
-    # One navigation observer per method explainer, wired from the same table
-    # the panels are built from, so a new panel cannot forget its button.
-    lapply(.DOCS_METHODS, function(m) {
-      ca_on_click(input, paste0("go_", m$key), function() go_to(m$target))
-    })
-
-    ca_on_click(input, "go_worked", function() go_to("qual"))
-    ca_on_click(input, "go_conclusion", function() go_to("conclusion"))
-    ca_on_click(input, "to_intro", function() go_to("intro"))
-    ca_on_click(input, "to_data", function() go_to("data"))
-
-    output$provenance <- renderUI({
-      rows <- lapply(.DOCS_PROVENANCE, function(p) {
-        htmltools::tags$tr(
-          htmltools::tags$td(p[[1]]),
-          htmltools::tags$td(htmltools::tags$span(class = "ca-mono", p[[2]])),
-          htmltools::tags$td(.docs_provenance_value(state, p[[2]]))
-        )
-      })
-      htmltools::tags$table(
-        class = "ca-provenance-table",
-        htmltools::tags$thead(htmltools::tags$tr(
-          htmltools::tags$th("What is shown"),
-          htmltools::tags$th("Field of cure.appropriateness()"),
-          htmltools::tags$th("Current value")
-        )),
-        htmltools::tags$tbody(rows)
-      )
-    })
-
-    output$version_line <- renderUI({
-      v <- tryCatch(
-        as.character(utils::packageVersion("cureAssess")),
-        error = function(e) NULL
-      )
-      htmltools::tags$p(
-        "Package version in this session: ",
-        htmltools::tags$span(
-          class = "ca-mono",
-          if (is.null(v)) ca_dash() else v
-        ),
-        "."
-      )
-    })
-
     invisible(NULL)
   })
 }
