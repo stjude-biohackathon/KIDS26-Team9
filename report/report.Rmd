@@ -583,9 +583,9 @@ src_txt <- if (identical(src, "builtin")) {
 }
 scale_txt <- if (!is.null(P_MAP$time_scale)) {
   if (identical(P_MAP$time_scale, "days_to_years")) {
-    "Days converted to years — times were divided by 365.25"
+    "Days converted to years: times were divided by 365.25"
   } else {
-    "None — times were used as supplied"
+    "None: times were used as supplied"
   }
 } else rp_dash()
 
@@ -881,7 +881,7 @@ cat('<p class="ca-lede">No assessment was supplied, so there is no recommendatio
 - Selukar S, Othus M (2023). RECeUS: Ratio estimation of censored uncured subjects, a different approach for assessing cure model appropriateness in studies with long-term survivors. *Statistics in Medicine*, 42(3), 209&ndash;227. doi:10.1002/sim.9610
 - Maller RA, Resnick S, Shemehsavar S (2024). Finite sample and asymptotic distributions of a statistic for sufficient follow-up in cure models. *Canadian Journal of Statistics*, 52(2), 359&ndash;379. doi:10.1002/cjs.11771
 - Yuen TP, Musta E (2024). Testing for sufficient follow-up in survival data with a cure fraction. arXiv:2403.16832.
-- Mudunkotuwa G, Ghosh D, Triplett B, Selukar S. A Tutorial for Evaluating Cure Model Appropriateness (in preparation).
+- Mudunkotuwa G, Ghosh D, Selukar S (2026). A Tutorial for Evaluating Cure Model Appropriateness. arXiv:2605.04999v2 [stat.ME].
 
 Every statistic above is a field of a `cureAssess` object. `cureAssess` is MIT licensed;
 authors Geethanjalee Mudunkotuwa and Durbadal Ghosh. Cite the tutorial manuscript for the

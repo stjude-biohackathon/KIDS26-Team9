@@ -1092,7 +1092,7 @@ ca_viz_aic_dots <- function(aic_table, best = NULL, dark = FALSE) {
     ggplot2::scale_size_manual(values = c(`TRUE` = 4.2, `FALSE` = 3.0),
                                guide = "none") +
     ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0.04, 0.12))) +
-    ggplot2::labs(x = "Model comparison score — smaller is a better description",
+    ggplot2::labs(x = "Model comparison score: smaller is a better description",
                   y = NULL) +
     theme_cure_assess(dark) +
     ggplot2::theme(

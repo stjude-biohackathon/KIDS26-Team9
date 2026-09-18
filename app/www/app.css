@@ -342,7 +342,10 @@ code { color: var(--ca-ink); background: var(--ca-surface-3);
   gap: var(--ca-s-5);
   align-items: start;
   padding: var(--ca-s-5);
-  max-width: 1600px;
+  /* No max-width: the shell and its card grids span the whole viewport, at any
+     width. Line length stays readable because the measure is per element
+     (§2: `p` carries --ca-measure, and .ca-lede and the prose blocks carry
+     their own ch caps), not on the shell. */
   margin-inline: auto;
 }
 .ca-main {

@@ -96,8 +96,8 @@
     <h3>Model comparison</h3>
     <p class="ca-method__lead">
       Does a model that allows a permanently event-free group describe these data better
-      than one that does not? Eight models are fitted — four survival shapes, each with
-      and without a cured group — and ranked. If the best-ranked model is one without a
+      than one that does not? Eight models are fitted (four survival shapes, each with
+      and without a cured group) and ranked. If the best-ranked model is one without a
       cured group, a cure model is not appropriate and nothing downstream can rescue it.
     </p>
 
@@ -126,7 +126,7 @@
 
           <dt>The candidate set</dt>
           <dd>
-            Four shapes for the event times — exponential, Weibull, gamma and log-logistic.
+            Four shapes for the event times: exponential, Weibull, gamma and log-logistic.
             Each is fitted twice. Without a cured group the survival function is
             <span class="ca-m"><i>S</i><span class="br">(</span><i>t</i><span class="br">)</span><span class="op">=</span><i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="opt">;</span>&#8201;<i>&theta;</i><span class="br">)</span></span>.
             With a cured group it is the mixture
@@ -141,7 +141,7 @@
           <dt>Symbols</dt>
           <dd>
             <div class="ca-syms">
-              <div><span class="ca-m"><i>&pi;</i></span><span>the cure fraction — the share of the population that will never experience the event</span></div>
+              <div><span class="ca-m"><i>&pi;</i></span><span>the cure fraction: the share of the population that will never experience the event</span></div>
               <div><span class="ca-m"><i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span></span><span>the latency survival function: survival of the uncured, falling from 1 to 0</span></div>
               <div><span class="ca-m"><i>&theta;</i></span><span>the shape and scale parameters of the latency distribution</span></div>
               <div><span class="ca-m"><i>y</i><sub>i</sub><span class="opt">,</span>&#8201;<i>d</i><sub>i</sub></span><span>the observed time for subject <span class="ca-m"><i>i</i></span> and its indicator, 1 for an event and 0 for censoring</span></div>
@@ -161,7 +161,7 @@
           <dt>Decision rule</dt>
           <dd>
             Rank every candidate by AIC and take the smallest. There is no threshold, no
-            significance level and no sample-size dependence — it is a ranking, not a test.
+            significance level and no sample-size dependence. It is a ranking, not a test.
             If the winner is a model without a cured group, the conclusion is that a cure
             model is not appropriate. If the winner has a cured group, the smallest-AIC
             <em>cure</em> model supplies the distribution used for the ratio of censored
@@ -170,7 +170,7 @@
 
           <dt>What is implemented here</dt>
           <dd>
-            The ranking only. No minimum AIC gap is required — the common
+            The ranking only. No minimum AIC gap is required: the common
             “<span class="ca-m">&Delta;</span>AIC<span class="ca-m"><span class="op">&gt;</span>2</span>”
             convention is not applied, so a cure model that wins by 0.3 wins outright, and
             a near-tie is visible in the table rather than resolved by a rule. There is no
@@ -181,7 +181,7 @@
 
           <dt>When it cannot be computed</dt>
           <dd>
-            An individual fit can fail to converge — too few events, a flat likelihood in
+            An individual fit can fail to converge: too few events, a flat likelihood in
             the cure fraction, or an estimate driven to the boundary. That model keeps its
             row, carries the reason it failed, and sorts last; it is never hidden, because
             which models failed is itself informative. If every fit fails there is no
@@ -224,8 +224,8 @@
             expressed as the number of events falling within one gap-width of the last
             event. It targets the condition
             <span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub><span class="op">&lt;</span><i>&tau;</i><sub class="up">G</sub></span>
-            — that the event-time distribution of the uncured is exhausted before censoring
-            runs out — against the null
+            (that the event-time distribution of the uncured is exhausted before censoring
+            runs out) against the null
             <span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub><span class="op">&#8805;</span><i>&tau;</i><sub class="up">G</sub></span>.
           </dd>
 
@@ -251,7 +251,7 @@
           <dd>
             <div class="ca-syms">
               <div><span class="ca-m"><i>Y</i><sup class="up">*</sup></span><span>largest observed <em>event</em> time</span></div>
-              <div><span class="ca-m"><i>Y</i><sub class="up">max</sub></span><span>largest observed time of any kind — the end of follow-up in the data</span></div>
+              <div><span class="ca-m"><i>Y</i><sub class="up">max</sub></span><span>largest observed time of any kind: the end of follow-up in the data</span></div>
               <div><span class="ca-m"><i>N</i><sub>n</sub></span><span>number of events falling in the window above</span></div>
               <div><span class="ca-m"><i>n</i></span><span>the number of subjects</span></div>
               <div><span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub></span><span>the earliest time by which every uncured subject has had the event</span></div>
@@ -272,7 +272,7 @@
           <dd>
             Follow-up is declared sufficient when
             <span class="ca-m"><i>&alpha;</i><sub>n</sub><span class="op">&lt;</span>0.05</span>.
-            The threshold is the fixed level 0.05 and does not move with sample size — but
+            The threshold is the fixed level 0.05 and does not move with sample size, but
             the statistic itself is an <span class="ca-m"><i>n</i></span>-th power, so the
             <em>number of events</em> the rule demands is close to constant: for any
             <span class="ca-m"><i>n</i><span class="op">&#8805;</span>4</span>, the rule is
@@ -299,7 +299,7 @@
 
           <dt>When it cannot be computed</dt>
           <dd>
-            When the largest observed time is an event — that is,
+            When the largest observed time is an event, that is,
             <span class="ca-m"><i>Y</i><sub class="up">max</sub><span class="op">=</span><i>Y</i><sup class="up">*</sup></span>.
             The gap is then zero, the window collapses to a point, and there is no observed
             stretch beyond the last event to measure. This is not a failure to converge; it
@@ -311,7 +311,7 @@
           <dd>
             Maller RA, Zhou S (1994). Testing for sufficient follow-up and outliers in
             survival data. <em>Journal of the American Statistical Association</em>,
-            89(428), 1499&ndash;1506 — their equation (5). See also Maller RA, Zhou X (1996),
+            89(428), 1499&ndash;1506: their equation (5). See also Maller RA, Zhou X (1996),
             <em>Survival Analysis with Long-Term Survivors</em>, Wiley.
           </dd>
 
@@ -329,8 +329,8 @@
     <p class="ca-method__lead">
       The same question as above, read on a scale that stays legible. It reports the share
       of the sample whose events fall in that end-of-data window, rather than raising it to
-      the power <span class="ca-m"><i>n</i></span>. Larger is better here — the opposite of
-      the other two readings — and its threshold moves with sample size.
+      the power <span class="ca-m"><i>n</i></span>. Larger is better here, the opposite of
+      the other two readings, and its threshold moves with sample size.
     </p>
 
     <details class="ca-more">
@@ -340,7 +340,7 @@
 
           <dt>What it measures</dt>
           <dd>
-            The proportion of the sample whose events fall in the late window — a direct
+            The proportion of the sample whose events fall in the late window, a direct
             reading of how many events the quiet tail is standing on. It uses the identical
             window and the identical event count as the Maller&ndash;Zhou reading, on the
             untransformed scale.
@@ -365,7 +365,7 @@
             <div class="ca-syms">
               <div><span class="ca-m"><i>Y</i><sup class="up">*</sup></span><span>largest observed event time</span></div>
               <div><span class="ca-m"><i>Y</i><sub class="up">max</sub></span><span>largest observed time of any kind</span></div>
-              <div><span class="ca-m"><i>N</i><sub>n</sub></span><span>events in the window — the same count the Maller&ndash;Zhou reading uses</span></div>
+              <div><span class="ca-m"><i>N</i><sub>n</sub></span><span>events in the window: the same count the Maller&ndash;Zhou reading uses</span></div>
               <div><span class="ca-m"><i>n</i></span><span>the number of subjects</span></div>
             </div>
           </dd>
@@ -419,7 +419,7 @@
             two scales, and never as two independent pieces of evidence.
           </dd>
 
-          <dt>What is implemented here — and what is not</dt>
+          <dt>What is implemented here, and what is not</dt>
           <dd>
             The rule applied is the <span class="ca-m"><i>&alpha;</i><sub>n</sub></span>-equivalent
             one given above. The exact finite-sample critical values for
@@ -476,8 +476,8 @@
 
           <dt>What it measures</dt>
           <dd>
-            The same quantity — events in a late window, raised to the power
-            <span class="ca-m"><i>n</i></span> — but with the window rescaled by how far the
+            The same quantity (events in a late window, raised to the power
+            <span class="ca-m"><i>n</i></span>) but with the window rescaled by how far the
             last event sits from the end of follow-up, which tightens it when that gap is a
             small fraction of the observed span.
           </dd>
@@ -601,7 +601,7 @@
             Not the tail of the observed curve, but two fitted quantities: the cure fraction,
             and the share of the still-event-free mass at the end of follow-up that belongs
             to the uncured. The second is the quantity that makes a cure fraction
-            identifiable — if almost none of the uncured are left unresolved, the plateau is
+            identifiable: if almost none of the uncured are left unresolved, the plateau is
             the cured group and not an artefact of when the study stopped.
           </dd>
 
@@ -637,10 +637,10 @@
           <dt>Symbols</dt>
           <dd>
             <div class="ca-syms">
-              <div><span class="ca-m"><i>&tau;</i></span><span>the analysis time at which the ratio is read — here the largest observed follow-up time in the data</span></div>
+              <div><span class="ca-m"><i>&tau;</i></span><span>the analysis time at which the ratio is read: here the largest observed follow-up time in the data</span></div>
               <div><span class="ca-m"><span class="ca-hat it">&pi;</span></span><span>the estimated cure fraction</span></div>
               <div><span class="ca-m"><span class="ca-hat it">&theta;</span></span><span>the estimated shape and scale of the latency distribution</span></div>
-              <div><span class="ca-m"><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span><span>the fraction of uncured subjects still event-free at <span class="ca-m"><i>&tau;</i></span> — written <span class="ca-m"><i>u</i></span> in the source paper</span></div>
+              <div><span class="ca-m"><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span><span>the fraction of uncured subjects still event-free at <span class="ca-m"><i>&tau;</i></span>, written <span class="ca-m"><i>u</i></span> in the source paper</span></div>
               <div><span class="ca-m"><i>S</i><span class="br">(</span><i>&tau;</i><span class="br">)</span></span><span>the fraction of the whole cohort still event-free at <span class="ca-m"><i>&tau;</i></span></span></div>
               <div><span class="ca-m"><span class="ca-hat it">r</span></span><span>the remaining-uncured ratio: the uncured share of what is left, standardised by the cure fraction and the censoring pattern</span></div>
             </div>
@@ -656,9 +656,9 @@
 
           <dt>Direction</dt>
           <dd>
-            For the cure fraction, <strong>larger is better</strong> — a cure fraction away
+            For the cure fraction, <strong>larger is better</strong>: a cure fraction away
             from zero is evidence that there is a cured group to model. For the ratio,
-            <strong>smaller is better</strong> — a small ratio means little of the uncured
+            <strong>smaller is better</strong>: a small ratio means little of the uncured
             group is still unresolved, which is evidence of sufficient follow-up. Evidence
             <em>for</em> a cure model requires both at once.
           </dd>
@@ -684,7 +684,7 @@
           <dd>
             Point estimates only. The asymptotic normal distribution of the ratio and the
             associated confidence interval are established in the source paper but are not
-            used in the decision — the rule compares two point estimates against two fixed
+            used in the decision: the rule compares two point estimates against two fixed
             constants. The analysis time is fixed at the largest observed follow-up time
             rather than a protocol-specified administrative censoring time. No sensitivity
             analysis across thresholds is run, and no alternative model families are tried
@@ -696,7 +696,7 @@
 
           <dt>When it cannot be computed</dt>
           <dd>
-            When the maximum-likelihood fit for the chosen family does not converge — too
+            When the maximum-likelihood fit for the chosen family does not converge: too
             few events, a likelihood flat in the cure fraction, or an estimate pinned to the
             boundary. There is then no cure fraction and no ratio, and the decision is
             withheld rather than guessed. Unlike the three follow-up readings, this one does
@@ -745,8 +745,8 @@
 
         <dt>Event times</dt>
         <dd>
-          Each patient is either cured — with probability <span class="ca-m"><i>&pi;</i></span>,
-          and then never has the event — or uncured, in which case the event time is drawn
+          Each patient is either cured (with probability <span class="ca-m"><i>&pi;</i></span>,
+          and then never has the event) or uncured, in which case the event time is drawn
           from a Weibull distribution with shape 2 and scale 1. The cohort survival
           function is therefore
           <span class="ca-eq ca-math">
@@ -768,8 +768,8 @@
           <span class="ca-m"><i>u</i><span class="op">=</span><i>S</i><sub>u</sub><span class="br">(</span><i>&tau;</i><span class="br">)</span></span>
           for the fraction of uncured patients still event-free at the analysis time. The
           analysis time <span class="ca-m"><i>&tau;</i></span> is chosen to hit each target
-          <span class="ca-m"><i>u</i></span> in 0.25, 0.10, 0.05, 0.01 and 0.001 — the
-          75th, 90th, 95th, 99th and 99.9th percentiles of the uncured distribution — then
+          <span class="ca-m"><i>u</i></span> in 0.25, 0.10, 0.05, 0.01 and 0.001 (the
+          75th, 90th, 95th, 99th and 99.9th percentiles of the uncured distribution), then
           rounded to the nearest quarter so the analysis lands at a plausible calendar
           point. That gives analysis dates of 1.25, 1.50, 1.75, 2.25 and 2.75. This
           parameterisation makes follow-up comparable across settings.
@@ -787,7 +787,7 @@
             <span class="opt">,</span>&emsp;
             <i>D</i><span class="op">=</span><span class="br">1</span><span class="br">&#123;</span><i>T</i><span class="op">&#8804;</span><i>&tau;</i><span class="op">&minus;</span><i>A</i><span class="br">&#125;</span>
           </span>
-          and late entrants are censored earlier — the administrative censoring pattern of
+          and late entrants are censored earlier, the administrative censoring pattern of
           a real trial. One example adds random loss to follow-up on top of that.
         </dd>
 
@@ -808,7 +808,7 @@
           follow-up, and a substantial cure fraction with long follow-up. Three examples
           are generated so that the largest observed time is an <em>event</em> rather than a
           censored observation, which is the case in which all three follow-up readings are
-          unavailable — they are included so the behaviour can be seen rather than
+          unavailable. They are included so the behaviour can be seen rather than
           described. The four original examples predate this design and use a flat
           follow-up limit with no staggered entry.
         </dd>
@@ -851,7 +851,7 @@
   <dd>
     The proportion of the population not susceptible to the event of interest. On a
     Kaplan&ndash;Meier plot it is the height at which the curve would settle. Cure is a
-    latent status — no subject is observed to be cured — so the term describes a shape in
+    latent status (no subject is observed to be cured), so the term describes a shape in
     the data, not a clinical promise.
   </dd>
 
@@ -892,8 +892,8 @@
 
   <dt><span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub></span> and <span class="ca-m"><i>&tau;</i><sub class="up">G</sub></span></dt>
   <dd>
-    The earliest time by which the event-time distribution of the uncured reaches 1 — every
-    susceptible subject has had the event — and the corresponding endpoint of the censoring
+    The earliest time by which the event-time distribution of the uncured reaches 1 (every
+    susceptible subject has had the event) and the corresponding endpoint of the censoring
     distribution. The classical condition for assessing a cure fraction is
     <span class="ca-m"><i>&tau;</i><sub class="up">F<sub>0</sub></sub><span class="op">&lt;</span><i>&tau;</i><sub class="up">G</sub></span>:
     the longest event times of the uncured must not be hidden by censoring.
@@ -973,7 +973,7 @@
   "Selukar S, Othus M (2023). RECeUS: Ratio estimation of censored uncured subjects, a different approach for assessing cure model appropriateness in studies with long-term survivors. Statistics in Medicine, 42(3), 209\u2013227. doi:10.1002/sim.9610",
   "Maller RA, Resnick S, Shemehsavar S (2024). Finite sample and asymptotic distributions of a statistic for sufficient follow-up in cure models. Canadian Journal of Statistics, 52(2), 359\u2013379. doi:10.1002/cjs.11771",
   "Yuen TP, Musta E (2024). Testing for sufficient follow-up in survival data with a cure fraction. arXiv:2403.16832.",
-  "Mudunkotuwa G, Ghosh D, Triplett B, Selukar S. A Tutorial for Evaluating Cure Model Appropriateness (in preparation)."
+  "Mudunkotuwa G, Ghosh D, Selukar S (2026). A Tutorial for Evaluating Cure Model Appropriateness. arXiv:2605.04999v2 [stat.ME]."
 )
 
 
@@ -1031,7 +1031,7 @@ ca_docs_sections <- function() {
           htmltools::tags$div(
             class = "ca-card__body",
             lapply(.DOCS_CHECKS, function(s) {
-              htmltools::tags$p(htmltools::tags$strong(s[[1]]), " \u2014 ", s[[2]])
+              htmltools::tags$p(htmltools::tags$strong(s[[1]]), ": ", s[[2]])
             })
           )
         )

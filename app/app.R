@@ -12,6 +12,64 @@
 #          or:  shiny::runApp()        from inside app/
 # =============================================================================
 
+# ---- package bootstrap: install what is missing, then attach ---------------
+# So the app runs on a fresh computer without the user installing anything by
+# hand. Named here: every package the app itself calls to load a dataset, run
+# an assessment and render a report. survival, survminer, dplyr and ggplot2 are
+# also cureAssess dependencies, but app code calls them directly, so they are
+# named. knitr and rmarkdown are the report download (mod_recommendation.R).
+# flexsurv and flexsurvcure are NOT named: no app code calls them and they
+# arrive as cureAssess dependencies. cureAssess itself is handled below,
+# through the same helper, because it keeps a source fallback that the others
+# do not have.
+.CA_PACKAGES <- c("shiny", "bslib", "DT", "ggplot2", "htmltools",
+                  "survival", "survminer", "dplyr", "rmarkdown", "knitr")
+
+# Installs only what is genuinely absent, so a normal launch is a handful of
+# requireNamespace() calls, fast and silent, and nothing is ever reinstalled. A
+# non-interactive Rscript session has no mirror chooser, so a mirror is set
+# explicitly; an unwritable library is swapped for the per-user one out loud
+# rather than failing part way through; installing is a side effect on this
+# computer, so the exact package list is printed before anything is fetched;
+# and a machine with no network stops with one sentence naming what it could
+# not get instead of a raw installation error.
+.ca_install_missing <- function(pkgs) {
+  missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1L), quietly = TRUE)]
+  if (length(missing) == 0L) return(invisible(character()))
+
+  repos <- getOption("repos")
+  if (!"CRAN" %in% names(repos) || !grepl("^https?://", repos[["CRAN"]])) {
+    repos[["CRAN"]] <- "https://cloud.r-project.org"
+    options(repos = repos)
+  }
+
+  lib <- .libPaths()[[1L]]
+  if (file.access(lib, mode = 2L) != 0L) {
+    lib <- path.expand(Sys.getenv("R_LIBS_USER", unset = file.path("~", "R", "library")))
+    dir.create(lib, recursive = TRUE, showWarnings = FALSE)
+    .libPaths(c(lib, .libPaths()))
+    message("The main R library is not writable, so packages will be installed into ", lib, ".")
+  }
+
+  message("Setting up: installing ", length(missing), " missing package(s) from ",
+          repos[["CRAN"]], ": ", paste(missing, collapse = ", "),
+          ". A first run can take several minutes.")
+  try(suppressWarnings(utils::install.packages(missing, lib = lib, repos = repos)),
+      silent = TRUE)
+
+  still <- missing[!vapply(missing, requireNamespace, logical(1L), quietly = TRUE)]
+  if (length(still) > 0L) {
+    stop("These required packages could not be installed from CRAN: ",
+         paste(still, collapse = ", "),
+         ". Check this computer's internet connection and start the app again.",
+         call. = FALSE)
+  }
+  message("Setup finished: installed ", paste(missing, collapse = ", "), ".")
+  invisible(missing)
+}
+
+.ca_install_missing(.CA_PACKAGES)
+
 # ---- libraries: these five, in this order, and no others -------------------
 # suppressPackageStartupMessages: bslib masks utils::page and DT masks two
 # shiny exports, and each prints an "Attaching package" block to the console on
@@ -30,8 +88,13 @@ suppressPackageStartupMessages({
 # preferred; the vendored source at cureAssess/ is the fallback so a teammate
 # with a fresh clone and no install is not blocked (same idiom as
 # app-scaffold/app.R). Either way the package is attached before the UI is built.
+# cureAssess is on CRAN now, so the middle branch installs it like any other
+# package; the vendored source and devtools::load_all() stay behind it for a
+# developer working from a clone, and for a machine with no network.
 if (requireNamespace("cureAssess", quietly = TRUE)) {
   library(cureAssess)                                  # nolint: the fifth library
+} else if (!inherits(try(.ca_install_missing("cureAssess"), silent = TRUE), "try-error")) {
+  library(cureAssess)                                  # just installed from CRAN
 } else {
   .ca_vendored <- Filter(dir.exists, c("cureAssess", file.path("..", "cureAssess")))
   if (length(.ca_vendored) > 0L && requireNamespace("devtools", quietly = TRUE)) {
@@ -95,8 +158,8 @@ CA_NAV_LABELS <- c(
   expert = "Expert judgment",
   data   = "Data",
   qual   = "Qualitative",
-  quant  = "Quantitative — Assess Single Datasets",
-  qmulti = "Quantitative — Assess Multiple Datasets",
+  quant  = "Quantitative – Assess Single Datasets",
+  qmulti = "Quantitative – Assess Multiple Datasets",
   rec    = "Recommendation",
   docs   = "Documentation"
 )
@@ -110,8 +173,8 @@ CA_NAV_TITLES <- c(
   expert = "Expert judgment",
   data   = "Data",
   qual   = "Visual assessment",
-  quant  = "Quantitative — Assess Single Datasets",
-  qmulti = "Quantitative — Assess Multiple Datasets",
+  quant  = "Quantitative – Assess Single Datasets",
+  qmulti = "Quantitative – Assess Multiple Datasets",
   rec    = "Recommendation",
   docs   = "Documentation"
 )

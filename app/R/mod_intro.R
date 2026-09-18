@@ -227,16 +227,34 @@ mod_intro_ui <- function(id) {
     # FINAL_CONTRACT §D.7 fixes the order of what follows: the small equation,
     # then the drawn cure-model diagram, then the flowchart, then the control.
     #
-    # The equation, with the poster's own line. The notation in the alt text is
-    # the poster's: S_a(t) = pi_a + (1 - pi_a) S_u,a(t), pi_a the cure fraction
-    # — never the README's (1 - p) form (§H.2). I2 / §G.8: `ca-figure--eq` is
-    # what makes it much smaller; the cap itself lives in the shared stylesheet.
-    .intro_figure(
-      src = "img/mixture-cure-model.png",
-      alt = paste("Mixture cure model: overall survival in group a equals the cure fraction pi_a plus",
-                  "one minus pi_a times the survival of the uncured in group a."),
-      cap = "Cure models estimate the cure fraction and the survival of the uncured separately.",
-      extra_class = "ca-figure--eq"
+    # The equation, now TYPESET HTML rather than the poster PNG
+    # (img/mixture-cure-model.png, which stays on disk but is unused here): an
+    # image can neither drop the poster's subscript a nor take a smaller font.
+    # The markup and the classes are the Documentation tab's own — `ca-eq
+    # ca-math`, italic <i> variables, a real <sub>, `&pi;` — so it matches the
+    # rest of the app, needs no new CSS, and renders with no network (C5). At
+    # `.ca-eq`'s 1.12em it is far smaller than the 520x76 plate the image
+    # occupied. The caption now names the three variables.
+    htmltools::tags$figure(
+      class = "ca-figure",
+      htmltools::HTML(paste0(
+        '<span class="ca-eq ca-math">',
+        '<i>S</i><span class="br">(</span><i>t</i><span class="br">)</span>',
+        '<span class="op">=</span><i>&pi;</i><span class="op">+</span>',
+        '<span class="br">(</span>1<span class="op">&minus;</span><i>&pi;</i><span class="br">)</span>',
+        '&#8201;<i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span>',
+        '</span>'
+      )),
+      htmltools::tags$figcaption(
+        class = "ca-figure__cap",
+        htmltools::HTML(paste0(
+          '<span class="ca-m"><i>S</i><span class="br">(</span><i>t</i><span class="br">)</span></span>',
+          ' is survival in the whole group, ',
+          '<span class="ca-m"><i>&pi;</i></span> the cure fraction, and ',
+          '<span class="ca-m"><i>S</i><sub>u</sub><span class="br">(</span><i>t</i><span class="br">)</span></span>',
+          ' survival of the uncured.'
+        ))
+      )
     ),
 
     # I3: the drawn schematic of the mixture, immediately after the equation it

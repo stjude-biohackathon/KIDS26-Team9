@@ -773,7 +773,7 @@ CA_MODEL_LABELS <- c(
 # (cureAssess/cran-comments.md), so for now this is the upstream repository and
 # every on-screen label says "the package", never "CRAN". On acceptance, change
 # this one line to the CRAN address and regenerate app/www/img/cureassess-qr.svg.
-CA_PACKAGE_URL <- "https://github.com/GeethanjaleeM/cureAssess"
+CA_PACKAGE_URL <- "https://CRAN.R-project.org/package=cureAssess"
 
 
 # =============================================================================

@@ -385,7 +385,7 @@ mod_quantitative_ui <- function(id) {
       # ("Quantitative — single"); the page heading carries the lead's full
       # name, verbatim, em dash (U+2014) with spaces.
       htmltools::tags$h1(class = "ca-section__title",
-                         "Quantitative — Assess Single Datasets"),
+                         "Quantitative – Assess Single Datasets"),
       # The poster's own flowchart wording for this step, verbatim.
       htmltools::p(
         class = "ca-lede",

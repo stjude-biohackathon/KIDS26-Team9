@@ -12,7 +12,7 @@
 # file runs at source time — the CA_BATCH_* constants it references live in
 # helpers.R (§C.1) and are only ever touched when a function is called.
 #
-# FINAL_CONTRACT §C: batch is TAB 6, "Quantitative — Assess Multiple Datasets",
+# FINAL_CONTRACT §C: batch is TAB 6, "Quantitative – Assess Multiple Datasets",
 # mounted by app.R as nav id "qmulti" directly below the single-dataset
 # Quantitative tab. It is no longer an accordion panel on the Recommendation
 # tab. mod_batch_page_ui() (§C.3) supplies the page heading and lede and passes
@@ -108,7 +108,7 @@
 .CA_BATCH_F7 <- function(col) sprintf("Not assessed: this file has no column called %s.", col)
 
 .CA_BATCH_F12 <- function(k, max_groups) sprintf(
-  "That column has %s distinct values. This handles up to %s groups at once — pick a column with fewer.",
+  "That column has %s distinct values. This handles up to %s groups at once. Pick a column with fewer.",
   format(k, big.mark = ",", trim = TRUE), format(max_groups, trim = TRUE))
 
 .CA_BATCH_F22 <- function(n) sprintf(
@@ -748,7 +748,7 @@ ca_batch_group_choices <- function(raw, map = NULL) {
 # 7. UI
 # ===========================================================================
 
-#' The Quantitative — Assess Multiple Datasets tab (FINAL_CONTRACT §C.3)
+#' The Quantitative – Assess Multiple Datasets tab (FINAL_CONTRACT §C.3)
 #'
 #' The SAME module id is passed straight through to mod_batch_ui(), so no extra
 #' namespace level is introduced and every existing input id is unchanged. The
@@ -761,7 +761,7 @@ mod_batch_page_ui <- function(id) {
     htmltools::tags$section(
       class = "ca-section",
       htmltools::tags$h1(class = "ca-section__title",
-                         "Quantitative — Assess Multiple Datasets"),
+                         "Quantitative – Assess Multiple Datasets"),
       htmltools::tags$p(class = "ca-lede",
                         "The same assessment, run over several datasets at once.")
     ),

@@ -62,7 +62,7 @@ CA_DATASETS <- list(
   nwtco_high_risk = list(
     key         = "nwtco_high_risk",
     family      = "Real trial data",
-    label       = "nwtco \u2014 High risk (stage 3-4)",
+    label       = "nwtco: High risk (stage 3-4)",
     file        = "nwtco_high_risk.csv",
     time        = "edrel",
     status      = "rel",
@@ -75,7 +75,7 @@ CA_DATASETS <- list(
   colon_lev5fu = list(
     key         = "colon_lev5fu",
     family      = "Real trial data",
-    label       = "colon \u2014 Lev+5FU, recurrence",
+    label       = "colon: Lev+5FU, recurrence",
     file        = "colon_lev5fu.csv",
     time        = "time",
     status      = "status",
@@ -88,7 +88,7 @@ CA_DATASETS <- list(
   sim_a = list(
     key         = "sim_a",
     family      = "Four corners",
-    label       = "Simulated A \u2014 cure + mature follow-up",
+    label       = "Simulated A: cure + mature follow-up",
     file        = "sim_a.csv",
     time        = "Y",
     status      = "D",
@@ -101,7 +101,7 @@ CA_DATASETS <- list(
   sim_b = list(
     key         = "sim_b",
     family      = "Four corners",
-    label       = "Simulated B \u2014 cure hidden by short follow-up",
+    label       = "Simulated B: cure hidden by short follow-up",
     file        = "sim_b.csv",
     time        = "Y",
     status      = "D",
@@ -114,7 +114,7 @@ CA_DATASETS <- list(
   sim_c = list(
     key         = "sim_c",
     family      = "Four corners",
-    label       = "Simulated C \u2014 no cure fraction",
+    label       = "Simulated C: no cure fraction",
     file        = "sim_c.csv",
     time        = "Y",
     status      = "D",
@@ -127,7 +127,7 @@ CA_DATASETS <- list(
   sim_d = list(
     key         = "sim_d",
     family      = "Four corners",
-    label       = "Simulated D \u2014 censoring artifact",
+    label       = "Simulated D: censoring artifact",
     file        = "sim_d.csv",
     time        = "Y",
     status      = "D",
