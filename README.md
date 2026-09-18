@@ -52,24 +52,16 @@ Under construction: **Add screenshot of tabs from the app itself**. Briefly expl
 
 ```text
 KIDS26-Team9/
-├── README.md                  (exists — this file)
-├── LICENSE.md                 (exists — MIT)
-├── app/                       (TO BUILD — the Shiny app; A-01 onward)
-│   ├── app.R                  (TO BUILD — bslib navbar page, five tabs)
-│   └── R/mod_*.R              (TO BUILD — one Shiny module per tab, one owner per file)
-├── app-scaffold/              (exists — app.R, the scaffold app run during the smoke test; T-03)
-├── cureAssess/                (VENDORED — upstream package copy; do not edit, fix upstream)
-│   ├── R/                     (package source — read this when you need exact behaviour)
-│   └── cureAssess_0.1.0.tar.gz
-├── data/examples/             (TO BUILD — three curated CSVs + provenance README; B-02)
-├── docs/                      (exists — event guidance; team adds data-contract.md,
-│                               user-guide.md, handoff.md)
-├── project-management/        (exists — team.md, project-plan.md, CHECKLIST.md,
-│                               decisions.md to be added)
-├── report/                    (TO BUILD — report.Rmd, the parameterised HTML report; B-07)
-├── scripts/                   (exists — smoke_test.R, run during onboarding; T-03)
-└── tests/reference/           (TO BUILD — the reference oracle: AIC tables, all five
-                                diagnostics and verdicts the app must reproduce; G-01)
+├── README.md                  
+├── LICENSE.md                 
+├── app/                       
+│   ├── app.R                  
+│   └── R/              
+├── cureAssess/
+├── data-raw/              
+├── data/examples/             
+├── docs/                      
+└── report/                    
 ```
 
 ## Getting started
